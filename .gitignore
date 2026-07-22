@@ -2,3 +2,7 @@
 *.log
 *.xlsx
 .DS_Store
+
+# приватный контур: себестоимость наружу не публикуется (репозиторий открытый)
+costs_private.csv
+data/costs_private.csv
