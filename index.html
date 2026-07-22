@@ -1,0 +1,787 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uzum · дашборд карточек</title>
+<style>
+:root {
+  color-scheme: light;
+  --page:#f9f9f7; --surface:#fcfcfb; --ink:#0b0b0b; --ink2:#52514e; --muted:#6b6a65;
+  --grid:#e1e0d9; --axis:#c3c2b7; --border:rgba(11,11,11,.10);
+  --s1:#2a78d6; --s1-soft:#86b6ef; --s1-deep:#1c5cab;
+  --good:#0ca30c; --good-text:#006300; --warn:#fab219; --serious:#ec835a;
+  --crit:#d03b3b; --crit-text:#b02525;      /* -text: для мелкого текста, AA на светлом */
+  --rank-a:#0a7a0a; --rank-b:#41761f; --rank-c:#fab219; --rank-d:#c0392b;
+  --chip:#f0efec;
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#9a988f;
+  --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+  --s1:#3987e5; --s1-soft:#1c5cab; --s1-deep:#86b6ef;
+  --good:#0ca30c; --good-text:#3ec13e; --crit:#d03b3b; --crit-text:#f07a7a;
+  --rank-a:#0a7a0a; --rank-b:#41761f; --rank-c:#fab219; --rank-d:#c0392b;
+  --chip:#262624;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page:#0d0d0d; --surface:#1a1a19; --ink:#ffffff; --ink2:#c3c2b7; --muted:#9a988f;
+    --grid:#2c2c2a; --axis:#383835; --border:rgba(255,255,255,.10);
+    --s1:#3987e5; --s1-soft:#1c5cab; --s1-deep:#86b6ef;
+    --good:#0ca30c; --good-text:#3ec13e; --crit:#d03b3b; --crit-text:#f07a7a;
+    --rank-a:#0a7a0a; --rank-b:#41761f; --rank-c:#fab219; --rank-d:#c0392b;
+    --chip:#262624;
+  }
+}
+@media print {                       /* печать всегда светлая, иначе бельё по белому */
+  :root, :root[data-theme="dark"] {
+    color-scheme: light;
+    --page:#fff; --surface:#fff; --ink:#000; --ink2:#333; --muted:#555;
+    --grid:#ddd; --axis:#999; --border:rgba(0,0,0,.2); --chip:#f2f2f2;
+    --good-text:#006300; --crit-text:#a01f1f; }
+  .filters, #themeBtn, #drawer, #overlay { display:none !important; }
+  .tablewrap { max-height:none; overflow:visible; }
+  .card { break-inside:avoid; }
+}
+* { box-sizing:border-box; margin:0; }
+html,body { background:var(--page); color:var(--ink);
+  font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif; }
+a { color:var(--s1); text-decoration:none; }
+.wrap { max-width:1280px; margin:0 auto; padding:20px 24px 48px; }
+
+header.top { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; padding:6px 0 16px; }
+header.top h1 { font-size:20px; font-weight:650; }
+header.top .sub { color:var(--ink2); font-size:13px; }
+#themeBtn { margin-left:auto; border:1px solid var(--border); background:var(--surface);
+  color:var(--ink2); border-radius:8px; padding:5px 11px; cursor:pointer; font-size:13px; }
+
+.filters { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:16px; }
+.seg { display:inline-flex; background:var(--surface); border:1px solid var(--border);
+  border-radius:9px; overflow:hidden; }
+.seg button { border:0; background:transparent; color:var(--ink2); padding:6px 13px;
+  cursor:pointer; font-size:13px; font-weight:500; }
+.seg button[aria-pressed="true"] { background:var(--s1); color:#fff; }
+.chips { display:flex; gap:8px; flex-wrap:wrap; }
+.chip { border:1px solid var(--border); background:var(--surface); color:var(--ink2);
+  border-radius:999px; padding:5px 13px; cursor:pointer; font-size:13px; }
+.chip[aria-pressed="true"] { border-color:var(--s1); color:var(--ink); box-shadow:inset 0 0 0 1px var(--s1); }
+.chip .n { font-weight:650; color:var(--ink); }
+/* 16px — иначе iOS Safari зумит страницу при фокусе в поле */
+#search { margin-left:auto; border:1px solid var(--border); background:var(--surface);
+  color:var(--ink); border-radius:9px; padding:6px 12px; font-size:16px; width:210px; }
+
+.kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; margin-bottom:16px; }
+.tile { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:13px 15px 11px; }
+.tile .lbl { color:var(--ink2); font-size:12.5px; margin-bottom:4px; }
+.tile .val { font-size:24px; font-weight:600; letter-spacing:-.01em; }
+.tile.hero .val { font-size:34px; }
+.tile .delta { font-size:12.5px; margin-top:2px; color:var(--ink2); }
+.tile .delta.up { color:var(--good-text); }
+.tile .delta.down { color:var(--ink2); }
+
+.card { background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  padding:16px 18px; margin-bottom:16px; }
+.card h2 { font-size:14.5px; font-weight:650; margin-bottom:2px; }
+.card .note { color:var(--muted); font-size:12px; }
+.chart-head { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:8px; }
+.chart-head .seg { margin-left:auto; }
+#trendWrap { position:relative; }
+#trendSvg { display:block; width:100%; }
+
+/* max-height включает полосу заголовка: sticky th работает только внутри
+   прокручиваемого предка, а не когда прокручивается сама страница */
+.tablewrap { overflow:auto; max-height:min(78vh, 900px); overscroll-behavior:contain; }
+table.main { border-collapse:collapse; width:100%; font-size:13px; }
+table.main th { text-align:right; color:var(--ink2); font-weight:550; font-size:12px;
+  padding:7px 9px; border-bottom:1px solid var(--axis); white-space:nowrap; cursor:pointer;
+  user-select:none; position:sticky; top:0; background:var(--surface); }
+table.main th.l, table.main td.l { text-align:left; }
+table.main th .arr { color:var(--s1); }
+table.main td { padding:7px 9px; border-bottom:1px solid var(--grid); text-align:right;
+  font-variant-numeric:tabular-nums; white-space:nowrap; }
+table.main tbody tr { cursor:pointer; }
+table.main tbody tr:hover { background:var(--chip); }
+:is(table.main tbody tr, th, .chip, .seg button, button, input):focus-visible {
+  outline:2px solid var(--s1); outline-offset:-2px; }
+table.main tbody tr:focus-visible td { background:var(--chip); }
+/* колонка «Сигнал» всегда видна: липнет к правому краю при горизонтальном скролле */
+table.main th:last-child, table.main td:last-child {
+  position:sticky; right:0; background:var(--surface);
+  box-shadow:inset 1px 0 0 var(--grid); }
+table.main th:last-child { z-index:2; }
+table.main tbody tr:hover td:last-child, table.main tbody tr:focus td:last-child {
+  background:var(--chip); }
+.tname { max-width:230px; overflow:hidden; text-overflow:ellipsis; font-weight:550; }
+.tcat { color:var(--muted); font-size:11.5px; }
+.rank { display:inline-block; min-width:20px; text-align:center; border-radius:6px;
+  font-size:11.5px; font-weight:650; padding:2px 5px; background:var(--chip); color:var(--ink2); }
+.rank.A { background:var(--rank-a); color:#fff; } .rank.B { background:var(--rank-b); color:#fff; }
+.rank.C { background:var(--rank-c); color:#3a2b00; } .rank.D { background:var(--rank-d); color:#fff; }
+.sig { font-size:12px; white-space:normal; max-width:250px; display:inline-block; text-align:left; }
+.sig.crit { color:var(--crit-text); font-weight:550; }
+.sig.warn { color:inherit; font-weight:550; }
+.sig.good { color:var(--good-text); font-weight:400; }
+/* дельты — нейтральнее статусов: направление, а не тревога */
+.dneg { color:var(--ink2); } .dpos { color:var(--good-text); }
+.spark { vertical-align:middle; }
+
+#tooltip { position:fixed; z-index:50; pointer-events:none; background:var(--surface);
+  border:1px solid var(--border); border-radius:9px; padding:8px 11px; font-size:12.5px;
+  box-shadow:0 4px 16px rgba(0,0,0,.13); display:none; min-width:130px; }
+#tooltip .tt-title { color:var(--ink2); margin-bottom:3px; }
+#tooltip .tt-val { font-size:15px; font-weight:650; }
+#tooltip .tt-sub { color:var(--muted); font-size:11.5px; margin-top:2px; }
+
+#overlay { position:fixed; inset:0; background:rgba(0,0,0,.35); display:none; z-index:60; }
+/* dvh: на iOS Safari 100vh уводит низ панели под тулбар */
+#drawer { position:fixed; top:0; right:-560px; width:540px; max-width:96vw;
+  height:100vh; height:100dvh; overscroll-behavior:contain;
+  background:var(--surface); border-left:1px solid var(--border); z-index:61;
+  transition:right .22s ease; overflow-y:auto; padding:20px 22px 40px; }
+@media (prefers-reduced-motion: reduce) { #drawer { transition:none; } }
+#drawer.open { right:0; }
+#drawer h3 { font-size:16px; font-weight:650; margin-bottom:2px; padding-right:36px; }
+#drawer .dcat { color:var(--muted); font-size:12px; margin-bottom:12px; }
+#dClose { position:absolute; top:14px; right:14px; border:1px solid var(--border);
+  background:transparent; color:var(--ink2); border-radius:8px; width:30px; height:30px;
+  cursor:pointer; font-size:15px; }
+.dgrid { display:grid; grid-template-columns:repeat(auto-fill,minmax(118px,1fr)); gap:9px; margin-bottom:16px; }
+.dcell { background:var(--chip); border-radius:9px; padding:8px 10px; }
+.dcell .k { color:var(--ink2); font-size:11px; }
+.dcell .v { font-size:15px; font-weight:600; margin-top:1px; }
+#drawer h4 { font-size:13px; font-weight:650; margin:16px 0 6px; }
+#drawer .dsig { border-radius:9px; padding:9px 12px; font-size:13px; margin-bottom:14px;
+  background:var(--chip); }
+table.mini { border-collapse:collapse; width:100%; font-size:12px; }
+table.mini th { text-align:right; color:var(--ink2); font-weight:550; padding:4px 7px;
+  border-bottom:1px solid var(--axis); }
+table.mini td { text-align:right; padding:4px 7px; border-bottom:1px solid var(--grid);
+  font-variant-numeric:tabular-nums; }
+table.mini th:first-child, table.mini td:first-child { text-align:left; }
+.empty { color:var(--muted); font-size:12.5px; padding:6px 0; }
+#trendTable { margin-top:10px; }
+#trendTable summary { color:var(--ink2); font-size:12.5px; cursor:pointer; }
+.tw-mini { max-height:260px; margin-top:8px; }
+.tw-mini th { position:sticky; top:0; background:var(--surface); }
+
+footer.notes { color:var(--muted); font-size:12px; line-height:1.6; margin-top:8px; }
+@media (max-width:720px) {
+  .wrap { padding:14px 12px 40px; }
+  #search { width:100%; margin-left:0; }
+  .tile .val { font-size:20px; } .tile.hero .val { font-size:26px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Uzum · UytMarket — карточки</h1>
+    <span class="sub" id="genInfo"></span>
+    <button id="themeBtn" type="button">Тема</button>
+  </header>
+
+  <div class="filters" id="filterRow">
+    <div class="seg" id="periodSeg" role="group" aria-label="Период">
+      <button data-p="7" aria-pressed="true" type="button">7 дней</button>
+      <button data-p="14" aria-pressed="false" type="button">14 дней</button>
+      <button data-p="30" aria-pressed="false" type="button">30 дней</button>
+    </div>
+    <div class="chips" id="sigChips"></div>
+    <input id="search" type="search" placeholder="Поиск товара…" aria-label="Поиск товара">
+  </div>
+
+  <section class="kpis" id="kpis" aria-label="Ключевые показатели"></section>
+
+  <section class="card">
+    <div class="chart-head">
+      <div>
+        <h2 id="trendTitle">Продажи по дням</h2>
+        <div class="note" id="trendNote"></div>
+      </div>
+      <div class="seg" id="metricSeg" role="group" aria-label="Метрика">
+        <button data-m="units" aria-pressed="true" type="button">Шт</button>
+        <button data-m="revenue" aria-pressed="false" type="button">Выручка</button>
+        <button data-m="profit" aria-pressed="false" type="button">Прибыль</button>
+      </div>
+    </div>
+    <div id="trendWrap"><svg id="trendSvg" role="img" aria-label="Продажи по дням"></svg></div>
+    <details id="trendTable">
+      <summary>Показать значения таблицей</summary>
+      <div class="tablewrap tw-mini"><table class="mini" id="trendTbl"></table></div>
+    </details>
+  </section>
+
+  <section class="card">
+    <h2>Карточки</h2>
+    <div class="note" id="tblNote" style="margin-bottom:8px"></div>
+    <div class="tablewrap"><table class="main" id="tbl">
+      <thead><tr id="tblHead"></tr></thead>
+      <tbody id="tblBody"></tbody>
+    </table></div>
+  </section>
+
+  <footer class="notes">
+    Ежедневное обновление 07:10 KST из Uzum Seller API (ранг, продажи, остатки, цены, просмотры,
+    конверсия — скользящие показатели API). Позиции по поисковым ключам не автоматизируются
+    (витрина за капчей, у ZoomSelling нет API) — еженедельный ассист-срез вносится в
+    keys_manual.csv и виден в деталях карточки. Отменённые заказы в продажи не входят.
+  </footer>
+</div>
+
+<div id="tooltip" role="status"></div>
+<div id="overlay"></div>
+<aside id="drawer" aria-label="Детали карточки">
+  <button id="dClose" type="button" aria-label="Закрыть">✕</button>
+  <div id="dBody"></div>
+</aside>
+
+<script>
+const DATA = {"shopTitle":"UytMarket","today":"2026-07-22","generated":"22.07.2026 07:17","shops":["112728"],"cards":[{"pid":"2657904","title":"ОВОЩЕЧИСТКА","category":"Meva va sabzavot kesgichlar","rank":"C","price":35500,"stock":39,"sold":1,"ret_pct":50.0,"rating":"0.0","reviews":0,"viewers":152,"conv":1.32,"roi":"-100.0","status":"IN_STOCK","moderation":"MODERATED","skus":2,"shop":"112728"},{"pid":"2658091","title":"ПАКЕТЫБОЛЬШИЕ","category":"Axlat qoplari","rank":"D","price":65000,"stock":0,"sold":1,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":123,"conv":0.81,"roi":"-100.0","status":"ARCHIVED","moderation":"ON_MODERATION","skus":4,"shop":"112728"},{"pid":"2658308","title":"СИНИЕТАБЛЕТКИ","category":"Vanna va hojatxona uchun vositalar","rank":"B","price":32500,"stock":123,"sold":35,"ret_pct":62.8,"rating":"0.0","reviews":0,"viewers":507,"conv":6.11,"roi":"-72.82471864680909","status":"IN_STOCK","moderation":"MODERATED","skus":3,"shop":"112728"},{"pid":"2658502","title":"МЫЛЬНИЦА","category":"Sovun idishlar, stakanlar","rank":"A","price":29700,"stock":15,"sold":74,"ret_pct":6.3,"rating":"5.0","reviews":12,"viewers":840,"conv":7.86,"roi":"136.053209350381","status":"IN_STOCK","moderation":"MODERATED","skus":3,"shop":"112728"},{"pid":"2658640","title":"СЕТКАОРГАН","category":"Xoʻjalik sumkalari","rank":"C","price":24000,"stock":0,"sold":5,"ret_pct":0.0,"rating":"5.0","reviews":1,"viewers":157,"conv":3.18,"roi":"-81.04547781967138","status":"ARCHIVED","moderation":"ON_MODERATION","skus":3,"shop":"112728"},{"pid":"2658806","title":"ДЕРЖАТЕЛЬДЛЯКРЫШЕК","category":"Oshxona qurollari uchun podstavkalar","rank":"A","price":57000,"stock":34,"sold":46,"ret_pct":8.0,"rating":"5.0","reviews":4,"viewers":1014,"conv":4.04,"roi":"-100.0","status":"IN_STOCK","moderation":"ON_MODERATION","skus":4,"shop":"112728"},{"pid":"2659116","title":"РАЗДЕЛИТЕЛЬОДЕЖДЫ","category":"Organayzerlar va ajratuvchilar","rank":"B","price":85000,"stock":0,"sold":2,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":246,"conv":0.41,"roi":"-88.88113219521483","status":"ARCHIVED","moderation":"ON_MODERATION","skus":4,"shop":"112728"},{"pid":"2659219","title":"ДУРШЛАГРИС","category":"Chovli va elak","rank":"D","price":32000,"stock":38,"sold":2,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":57,"conv":3.51,"roi":"-100.0","status":"IN_STOCK","moderation":"MODERATED","skus":2,"shop":"112728"},{"pid":"2661453","title":"ДУРШЛАГСЛОН","category":"Chovli va elak","rank":"C","price":50000,"stock":90,"sold":0,"ret_pct":100.0,"rating":"0.0","reviews":0,"viewers":63,"conv":1.59,"roi":"-100.0","status":"IN_STOCK","moderation":"MODERATED","skus":3,"shop":"112728"},{"pid":"2661858","title":"ПАКЕТЫДЛЯКРУП","category":"Sochiluvchan mahsulotlar uchun idishlar","rank":"D","price":75000,"stock":30,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":89,"conv":0.0,"roi":"-100.0","status":"IN_STOCK","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"2662663","title":"ШАПАЧКИМИШКИ","category":"Qayta foydalanish mumkin boʻlgan paketlar va qopchalar","rank":"D","price":18000,"stock":115,"sold":5,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":54,"conv":3.7,"roi":"-100.0","status":"IN_STOCK","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"2662882","title":"ШТАНГАСКЛАДНАЯ","category":"Pardalar va karnizlar","rank":"A","price":450000,"stock":0,"sold":10,"ret_pct":28.6,"rating":"5.0","reviews":1,"viewers":1459,"conv":0.89,"roi":"-100.0","status":"RUN_OUT","moderation":"ON_MODERATION","skus":2,"shop":"112728"},{"pid":"2663193","title":"ШАПОЧКИЦЫАЛЯТА","category":"Qayta foydalanish mumkin boʻlgan paketlar va qopchalar","rank":"D","price":65000,"stock":164,"sold":7,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":174,"conv":3.45,"roi":"-92.51617682302447","status":"IN_STOCK","moderation":"ON_MODERATION","skus":2,"shop":"112728"},{"pid":"2663965","title":"ЕРШИКИНАБОР","category":"Unitaz choʻtkalari","rank":"A","price":91000,"stock":3,"sold":35,"ret_pct":23.9,"rating":"4.7","reviews":6,"viewers":948,"conv":4.01,"roi":"-100.0","status":"IN_STOCK","moderation":"ON_MODERATION","skus":2,"shop":"112728"},{"pid":"2667097","title":"ЕРШИКСМЕННЫЙ","category":"Unitaz choʻtkalari","rank":"B","price":100000,"stock":0,"sold":5,"ret_pct":28.6,"rating":"0.0","reviews":0,"viewers":292,"conv":2.4,"roi":"-100.0","status":"ARCHIVED","moderation":"ON_MODERATION","skus":6,"shop":"112728"},{"pid":"2667399","title":"СМЕННЫЕНАСАДКИДЛЯЕРШИКОВ","category":"Unitaz choʻtkalari","rank":"A","price":30000,"stock":0,"sold":35,"ret_pct":0.0,"rating":"5.0","reviews":2,"viewers":405,"conv":7.65,"roi":"-78.95231383603476","status":"ARCHIVED","moderation":"ON_MODERATION","skus":9,"shop":"112728"},{"pid":"2667982","title":"АПТЕЧКИДЛЯДОМАОРГАН","category":"Dori-darmonlar uchun dori qutilari va sumkalar","rank":"D","price":160000,"stock":0,"sold":0,"ret_pct":100.0,"rating":"0.0","reviews":0,"viewers":290,"conv":0.34,"roi":"-100.0","status":"ARCHIVED","moderation":"ON_MODERATION","skus":4,"shop":"112728"},{"pid":"2828345","title":"ТРЯПКАМИКРОФИБРА","category":"Lattalar, salfetkalar va gubkalar","rank":"D","price":45000,"stock":0,"sold":4,"ret_pct":42.9,"rating":"5.0","reviews":1,"viewers":115,"conv":4.35,"roi":"-100.0","status":"ARCHIVED","moderation":"ON_MODERATION","skus":4,"shop":"112728"},{"pid":"2842914","title":"ВИДЕОГЛАЗОК","category":"Video ko‘zchalar","rank":"D","price":805000,"stock":2,"sold":3,"ret_pct":25.0,"rating":"0.0","reviews":0,"viewers":1136,"conv":0.35,"roi":"11.566197183098591","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2842983","title":"ВЫДВЕЖНОЙЯЩИК","category":"Oshxona tokchalari","rank":"D","price":93500,"stock":18,"sold":2,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":49,"conv":2.04,"roi":"-83.30357142857143","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2843053","title":"ГУБКИ","category":"Lattalar, salfetkalar va gubkalar","rank":"B","price":65500,"stock":359,"sold":41,"ret_pct":4.7,"rating":"4.8","reviews":5,"viewers":748,"conv":4.68,"roi":"-75.87488636363636","status":"IN_STOCK","moderation":"ON_MODERATION","skus":4,"shop":"112728"},{"pid":"2843128","title":"РЕБРИСТЫЕГУБКИ","category":"Lattalar, salfetkalar va gubkalar","rank":"B","price":27500,"stock":24,"sold":55,"ret_pct":8.3,"rating":"5.0","reviews":2,"viewers":551,"conv":9.8,"roi":"-5.078243370863869","status":"IN_STOCK","moderation":"MODERATED","skus":6,"shop":"112728"},{"pid":"2843158","title":"ДЕРЖАТЕЛЬГУБОК","category":"Tagkursi va tutqichlar","rank":"D","price":53300,"stock":32,"sold":8,"ret_pct":0.0,"rating":"5.0","reviews":1,"viewers":104,"conv":6.73,"roi":"-65.97872340425532","status":"IN_STOCK","moderation":"MODERATED","skus":2,"shop":"112728"},{"pid":"2843255","title":"ДОРОГОЙДИФФУЗОР","category":"Uy uchun iforlar","rank":"D","price":125000,"stock":50,"sold":10,"ret_pct":23.1,"rating":"0.0","reviews":0,"viewers":143,"conv":8.39,"roi":"-71.92310231023102","status":"IN_STOCK","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"2843333","title":"НАТУРАЛЬНЫЙДИФ","category":"Uy uchun iforlar","rank":"B","price":155000,"stock":67,"sold":7,"ret_pct":36.4,"rating":"0.0","reviews":0,"viewers":82,"conv":4.88,"roi":"-75.45914465408805","status":"IN_STOCK","moderation":"MODERATED","skus":5,"shop":"112728"},{"pid":"2843402","title":"КОРТРЯПКА","category":"Lattalar, salfetkalar va gubkalar","rank":"D","price":55000,"stock":30,"sold":8,"ret_pct":11.1,"rating":"0.0","reviews":0,"viewers":238,"conv":2.94,"roi":"-63.5959595959596","status":"IN_STOCK","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"2843463","title":"КРЫШКАОТБРЫЗГОВ","category":"Idishlar uchun qopqoqlar","rank":"D","price":68000,"stock":35,"sold":5,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":179,"conv":1.68,"roi":"-81.514","status":"IN_STOCK","moderation":"ON_MODERATION","skus":2,"shop":"112728"},{"pid":"2843588","title":"ВАКУУМКРЮЧ","category":"Ilgaklar va tutqichlar","rank":"D","price":57000,"stock":92,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":59,"conv":0.0,"roi":"-100.0","status":"IN_STOCK","moderation":"MODERATED","skus":14,"shop":"112728"},{"pid":"2843897","title":"МАСКАОЧИСТКАПОСУДЫ","category":"Lattalar, salfetkalar va gubkalar","rank":"D","price":57300,"stock":33,"sold":2,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":51,"conv":3.92,"roi":"-86.21353383458647","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2844006","title":"НОСИКЗЕЛЕНЫЙ","category":"Voronkalar","rank":"B","price":35500,"stock":19,"sold":7,"ret_pct":0.0,"rating":"5.0","reviews":2,"viewers":196,"conv":3.57,"roi":"-6.905594405594406","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2844104","title":"ОРГАНПОЛЕТОК","category":"Organayzerlar va ajratuvchilar","rank":"B","price":50300,"stock":32,"sold":8,"ret_pct":33.3,"rating":"0.0","reviews":0,"viewers":152,"conv":6.58,"roi":"-57.537696335078536","status":"IN_STOCK","moderation":"MODERATED","skus":2,"shop":"112728"},{"pid":"2845895","title":"ПЕНАДЛЯОБУВИ","category":"Poyabzal uchun koʻpikli tozalash vositalari","rank":"B","price":60100,"stock":28,"sold":8,"ret_pct":0.0,"rating":"4.0","reviews":1,"viewers":94,"conv":6.38,"roi":"-62.69004192872117","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2845956","title":"ПЛАСТИНЫДЛЯСТИРКИ","category":"Kir yuvish uchun gel va suyuqliklar","rank":"A","price":60000,"stock":0,"sold":30,"ret_pct":11.8,"rating":"5.0","reviews":3,"viewers":271,"conv":11.81,"roi":"154.47471910112358","status":"RUN_OUT","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2845985","title":"ДЕРЖАТЕЛЬКРЫШКИ","category":"Oshxona qurollari uchun podstavkalar","rank":"D","price":73500,"stock":18,"sold":1,"ret_pct":50.0,"rating":"0.0","reviews":0,"viewers":41,"conv":4.88,"roi":"-93.59011627906976","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2846046","title":"ПОДЪЕМДЛЯУНИТАЗА","category":"Unitaz uchun oʻrindiq","rank":"D","price":63500,"stock":22,"sold":8,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":176,"conv":2.27,"roi":"-2.508158508158508","status":"IN_STOCK","moderation":"MODERATED","skus":2,"shop":"112728"},{"pid":"2846118","title":"ПОЛКА","category":"Devor tokchalari","rank":"B","price":107000,"stock":35,"sold":5,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":187,"conv":1.6,"roi":"-77.23514851485149","status":"IN_STOCK","moderation":"MODERATED","skus":2,"shop":"112728"},{"pid":"2846160","title":"РИСОМОЙКА950МЛ","category":"Chovli va elak","rank":"D","price":71000,"stock":20,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":42,"conv":0.0,"roi":"-100.0","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2846206","title":"САЛФЕТКИАНТИЖИР3ВИДА","category":"Lattalar, salfetkalar va gubkalar","rank":"D","price":56000,"stock":20,"sold":2,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":29,"conv":6.9,"roi":"-94.13333333333334","status":"IN_STOCK","moderation":"MODERATED","skus":3,"shop":"112728"},{"pid":"2846266","title":"САЛФЕТКИНАЦ","category":"Kiyimlarni yuvish uchun rang tuzoqlari","rank":"D","price":45500,"stock":21,"sold":3,"ret_pct":25.0,"rating":"4.0","reviews":1,"viewers":89,"conv":4.49,"roi":"-82.528","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2847242","title":"САЛФЕТКИДЛЯЕДЫ","category":"Lattalar, salfetkalar va gubkalar","rank":"D","price":57500,"stock":32,"sold":3,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":41,"conv":7.32,"roi":"-81.065780730897","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2847309","title":"САЛФЕТКИПЯТНОВЫВОДИТЕЛЬ","category":"Lattalar, salfetkalar va gubkalar","rank":"A","price":23000,"stock":0,"sold":70,"ret_pct":13.6,"rating":"4.8","reviews":5,"viewers":641,"conv":10.61,"roi":"24.505785819482433","status":"RUN_OUT","moderation":"MODERATED","skus":2,"shop":"112728"},{"pid":"2847387","title":"СТИКЕРДЛЯОБУВИ","category":"Oyoq uchun dezodorantlar va spreylar","rank":"D","price":32000,"stock":57,"sold":3,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":37,"conv":5.41,"roi":"-91.58974358974359","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2847468","title":"АППАРАТСЕТКА","category":"Idish yuvish uchun buyumlar","rank":"B","price":47000,"stock":164,"sold":6,"ret_pct":33.3,"rating":"3.0","reviews":2,"viewers":754,"conv":1.06,"roi":"-92.759108040201","status":"IN_STOCK","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"2847586","title":"СТИКЕРОТКАМАРОВ","category":"Hasharotlarga qo'rqitish moslamalar","rank":"A","price":17820,"stock":37,"sold":157,"ret_pct":11.3,"rating":"4.6","reviews":7,"viewers":1456,"conv":11.06,"roi":"51.66494935688501","status":"IN_STOCK","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"2885187","title":"ПЕНИТСЯСАЛФЕТКИ","category":"Lattalar, salfetkalar va gubkalar","rank":"B","price":67300,"stock":23,"sold":12,"ret_pct":0.0,"rating":"5.0","reviews":3,"viewers":86,"conv":11.63,"roi":"-50.094208494208495","status":"IN_STOCK","moderation":"MODERATED","skus":1,"shop":"112728"},{"pid":"2885239","title":"ДЕРЖАТЕЛЬКУХХ","category":"Tagkursi va tutqichlar","rank":"D","price":210000,"stock":30,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":82,"conv":0.0,"roi":"-100.0","status":"IN_STOCK","moderation":"ON_MODERATION","skus":2,"shop":"112728"},{"pid":"3061376","title":"ПАКЕТЫ2ЯВЕРСИЯ","category":"Axlat qoplari","rank":"D","price":65000,"stock":0,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":0,"conv":null,"roi":"-100.0","status":"SENT","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"3061428","title":"СЕТКИОРГАН2ЯВЕРСИЯ","category":"Organayzerlar va ajratuvchilar","rank":"D","price":24000,"stock":0,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":0,"conv":null,"roi":"-100.0","status":"SENT","moderation":"MODERATED","skus":3,"shop":"112728"},{"pid":"3061483","title":"РАЗДЕЛИТЕЛЬОДЕЖДЦЫ2ЯВЕРСИЯ","category":"Organayzerlar va ajratuvchilar","rank":"D","price":85000,"stock":0,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":0,"conv":null,"roi":"-100.0","status":"SENT","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"3061510","title":"ТРЯПКИМНОГОРАЗОВЫЕ","category":"Lattalar, salfetkalar va gubkalar","rank":"D","price":45000,"stock":0,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":0,"conv":null,"roi":"-100.0","status":"SENT","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"3061540","title":"АПТЕЧКИВСЕ2ЯВЕРСИЯ","category":"Dori-darmonlar uchun dori qutilari va sumkalar","rank":"D","price":160000,"stock":0,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":0,"conv":null,"roi":"-100.0","status":"SENT","moderation":"MODERATED","skus":4,"shop":"112728"},{"pid":"3061577","title":"НАСАДКИЕРШ","category":"Unitaz choʻtkalari","rank":"D","price":30000,"stock":0,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":0,"conv":null,"roi":"-100.0","status":"SENT","moderation":"MODERATED","skus":9,"shop":"112728"},{"pid":"3061628","title":"СМЕННЫЙЕРШИК","category":"Unitaz choʻtkalari","rank":"D","price":100000,"stock":0,"sold":0,"ret_pct":0.0,"rating":"0.0","reviews":0,"viewers":0,"conv":null,"roi":"-100.0","status":"SENT","moderation":"MODERATED","skus":6,"shop":"112728"}],"sales":[{"date":"2026-06-16","pid":"2658806","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-16","pid":"2663965","u":1,"r":90000,"p":61000,"o":1,"c":0},{"date":"2026-06-17","pid":"2663965","u":2,"r":180000,"p":122000,"o":2,"c":0},{"date":"2026-06-18","pid":"2658091","u":1,"r":60000,"p":39750,"o":1,"c":0},{"date":"2026-06-18","pid":"2658502","u":2,"r":59400,"p":37020,"o":2,"c":0},{"date":"2026-06-18","pid":"2658806","u":1,"r":38500,"p":23625,"o":1,"c":0},{"date":"2026-06-18","pid":"2662882","u":1,"r":510000,"p":399500,"o":1,"c":1},{"date":"2026-06-18","pid":"2667399","u":1,"r":28000,"p":17150,"o":1,"c":0},{"date":"2026-06-18","pid":"2828345","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-18","pid":"2847586","u":1,"r":46000,"p":31550,"o":1,"c":0},{"date":"2026-06-19","pid":"2658308","u":3,"r":94000,"p":65090,"o":3,"c":0},{"date":"2026-06-19","pid":"2658502","u":3,"r":89100,"p":55530,"o":3,"c":0},{"date":"2026-06-19","pid":"2658806","u":2,"r":77000,"p":47250,"o":2,"c":0},{"date":"2026-06-19","pid":"2659219","u":1,"r":33500,"p":19625,"o":1,"c":0},{"date":"2026-06-19","pid":"2663965","u":1,"r":90000,"p":61000,"o":1,"c":0},{"date":"2026-06-19","pid":"2667399","u":2,"r":81000,"p":54300,"o":2,"c":0},{"date":"2026-06-19","pid":"2845895","u":2,"r":110000,"p":79150,"o":1,"c":0},{"date":"2026-06-19","pid":"2847309","u":1,"r":21200,"p":11710,"o":1,"c":0},{"date":"2026-06-19","pid":"2847586","u":1,"r":17820,"p":9006,"o":1,"c":0},{"date":"2026-06-20","pid":"2658502","u":1,"r":29700,"p":18510,"o":1,"c":0},{"date":"2026-06-20","pid":"2658806","u":2,"r":77000,"p":47250,"o":2,"c":0},{"date":"2026-06-20","pid":"2663965","u":3,"r":270000,"p":183000,"o":3,"c":0},{"date":"2026-06-20","pid":"2667399","u":1,"r":95000,"p":70250,"o":1,"c":0},{"date":"2026-06-20","pid":"2843053","u":1,"r":71100,"p":51130,"o":1,"c":0},{"date":"2026-06-20","pid":"2843128","u":2,"r":54000,"p":32700,"o":2,"c":0},{"date":"2026-06-20","pid":"2843463","u":1,"r":75500,"p":52890,"o":1,"c":0},{"date":"2026-06-20","pid":"2844104","u":2,"r":116600,"p":73618,"o":2,"c":0},{"date":"2026-06-20","pid":"2847586","u":2,"r":62360,"p":39388,"o":2,"c":0},{"date":"2026-06-21","pid":"2658308","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-21","pid":"2658502","u":2,"r":59400,"p":37020,"o":2,"c":0},{"date":"2026-06-21","pid":"2658806","u":1,"r":38500,"p":23625,"o":1,"c":0},{"date":"2026-06-21","pid":"2663965","u":1,"r":90000,"p":61000,"o":1,"c":0},{"date":"2026-06-21","pid":"2667399","u":3,"r":109000,"p":71200,"o":3,"c":0},{"date":"2026-06-21","pid":"2843255","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-21","pid":"2847309","u":2,"r":42400,"p":23420,"o":2,"c":0},{"date":"2026-06-21","pid":"2847468","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-21","pid":"2847586","u":2,"r":35640,"p":18012,"o":1,"c":1},{"date":"2026-06-22","pid":"2658308","u":11,"r":90000,"p":19650,"o":4,"c":2},{"date":"2026-06-22","pid":"2658502","u":4,"r":139400,"p":90520,"o":4,"c":0},{"date":"2026-06-22","pid":"2658806","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-22","pid":"2843255","u":1,"r":125500,"p":86365,"o":1,"c":0},{"date":"2026-06-22","pid":"2846046","u":1,"r":64300,"p":46190,"o":1,"c":0},{"date":"2026-06-22","pid":"2847309","u":2,"r":49200,"p":28860,"o":2,"c":0},{"date":"2026-06-22","pid":"2847586","u":2,"r":35820,"p":18156,"o":2,"c":0},{"date":"2026-06-23","pid":"2658502","u":1,"r":29700,"p":18510,"o":1,"c":0},{"date":"2026-06-23","pid":"2843053","u":1,"r":67300,"p":48090,"o":1,"c":0},{"date":"2026-06-23","pid":"2843402","u":1,"r":55500,"p":39150,"o":1,"c":0},{"date":"2026-06-23","pid":"2844006","u":1,"r":35500,"p":21375,"o":1,"c":0},{"date":"2026-06-23","pid":"2845956","u":1,"r":51100,"p":37935,"o":1,"c":0},{"date":"2026-06-23","pid":"2846118","u":1,"r":110000,"p":88000,"o":1,"c":0},{"date":"2026-06-23","pid":"2847309","u":3,"r":75000,"p":44250,"o":3,"c":0},{"date":"2026-06-23","pid":"2847586","u":4,"r":83000,"p":45400,"o":4,"c":0},{"date":"2026-06-24","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-06-24","pid":"2843128","u":1,"r":25500,"p":15150,"o":1,"c":0},{"date":"2026-06-24","pid":"2847242","u":1,"r":63100,"p":43980,"o":1,"c":0},{"date":"2026-06-24","pid":"2847309","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-24","pid":"2847586","u":5,"r":113500,"p":64550,"o":5,"c":0},{"date":"2026-06-25","pid":"2658502","u":1,"r":45100,"p":30830,"o":1,"c":0},{"date":"2026-06-25","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-06-25","pid":"2667097","u":1,"r":112500,"p":82000,"o":1,"c":0},{"date":"2026-06-25","pid":"2843128","u":1,"r":25500,"p":15150,"o":1,"c":0},{"date":"2026-06-25","pid":"2845895","u":1,"r":61100,"p":44547,"o":1,"c":0},{"date":"2026-06-25","pid":"2847309","u":1,"r":25000,"p":14750,"o":1,"c":0},{"date":"2026-06-25","pid":"2847586","u":4,"r":96500,"p":56200,"o":4,"c":1},{"date":"2026-06-26","pid":"2658308","u":1,"r":31100,"p":21496,"o":1,"c":0},{"date":"2026-06-26","pid":"2658502","u":4,"r":134200,"p":86360,"o":4,"c":0},{"date":"2026-06-26","pid":"2662882","u":1,"r":415000,"p":323750,"o":1,"c":0},{"date":"2026-06-26","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-06-26","pid":"2667399","u":2,"r":157000,"p":114100,"o":1,"c":0},{"date":"2026-06-26","pid":"2843128","u":2,"r":51000,"p":30300,"o":1,"c":0},{"date":"2026-06-26","pid":"2844104","u":1,"r":52800,"p":32794,"o":1,"c":0},{"date":"2026-06-26","pid":"2845895","u":2,"r":122200,"p":89094,"o":2,"c":0},{"date":"2026-06-26","pid":"2845956","u":2,"r":102200,"p":75870,"o":2,"c":0},{"date":"2026-06-26","pid":"2846266","u":1,"r":45500,"p":30900,"o":1,"c":0},{"date":"2026-06-26","pid":"2847309","u":2,"r":50000,"p":29500,"o":2,"c":0},{"date":"2026-06-26","pid":"2847586","u":7,"r":248000,"p":161650,"o":6,"c":1},{"date":"2026-06-27","pid":"2662882","u":1,"r":515000,"p":403500,"o":1,"c":0},{"date":"2026-06-27","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":1},{"date":"2026-06-27","pid":"2667097","u":1,"r":93500,"p":66800,"o":1,"c":0},{"date":"2026-06-27","pid":"2667399","u":2,"r":131500,"p":93950,"o":2,"c":0},{"date":"2026-06-27","pid":"2843128","u":1,"r":25500,"p":15150,"o":1,"c":0},{"date":"2026-06-27","pid":"2847309","u":8,"r":205000,"p":122000,"o":6,"c":0},{"date":"2026-06-27","pid":"2847586","u":9,"r":183500,"p":99550,"o":9,"c":1},{"date":"2026-06-28","pid":"2658502","u":2,"r":59400,"p":37020,"o":2,"c":0},{"date":"2026-06-28","pid":"2658806","u":3,"r":171000,"p":112500,"o":3,"c":0},{"date":"2026-06-28","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-06-28","pid":"2843053","u":1,"r":67300,"p":48090,"o":1,"c":0},{"date":"2026-06-28","pid":"2843128","u":1,"r":25500,"p":14900,"o":1,"c":0},{"date":"2026-06-28","pid":"2847309","u":6,"r":157500,"p":94500,"o":6,"c":0},{"date":"2026-06-28","pid":"2847586","u":7,"r":148500,"p":82050,"o":7,"c":1},{"date":"2026-06-28","pid":"2885187","u":1,"r":67550,"p":47790,"o":1,"c":0},{"date":"2026-06-29","pid":"2658502","u":1,"r":29700,"p":18510,"o":1,"c":0},{"date":"2026-06-29","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-06-29","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-06-29","pid":"2844104","u":1,"r":55700,"p":34911,"o":1,"c":1},{"date":"2026-06-29","pid":"2845956","u":1,"r":51100,"p":37935,"o":1,"c":0},{"date":"2026-06-29","pid":"2847309","u":1,"r":33500,"p":21550,"o":1,"c":0},{"date":"2026-06-29","pid":"2847586","u":7,"r":162000,"p":92850,"o":7,"c":1},{"date":"2026-06-30","pid":"2658502","u":2,"r":59400,"p":37020,"o":2,"c":0},{"date":"2026-06-30","pid":"2658640","u":1,"r":21000,"p":11550,"o":1,"c":0},{"date":"2026-06-30","pid":"2662882","u":1,"r":415000,"p":323750,"o":1,"c":0},{"date":"2026-06-30","pid":"2667399","u":2,"r":157000,"p":114100,"o":1,"c":0},{"date":"2026-06-30","pid":"2843255","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-30","pid":"2843333","u":1,"r":155500,"p":107765,"o":1,"c":0},{"date":"2026-06-30","pid":"2844006","u":1,"r":35500,"p":21375,"o":1,"c":0},{"date":"2026-06-30","pid":"2844104","u":1,"r":55700,"p":34911,"o":1,"c":2},{"date":"2026-06-30","pid":"2845956","u":1,"r":51100,"p":37935,"o":1,"c":0},{"date":"2026-06-30","pid":"2846118","u":1,"r":110000,"p":88000,"o":1,"c":0},{"date":"2026-06-30","pid":"2846266","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-06-30","pid":"2847309","u":12,"r":362000,"p":226600,"o":11,"c":2},{"date":"2026-06-30","pid":"2847586","u":5,"r":100500,"p":54150,"o":5,"c":1},{"date":"2026-07-01","pid":"2657904","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-01","pid":"2658640","u":1,"r":21000,"p":11550,"o":1,"c":0},{"date":"2026-07-01","pid":"2658806","u":2,"r":114000,"p":75000,"o":2,"c":0},{"date":"2026-07-01","pid":"2662882","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-01","pid":"2663965","u":1,"r":91100,"p":61880,"o":1,"c":1},{"date":"2026-07-01","pid":"2667097","u":1,"r":93500,"p":66800,"o":1,"c":0},{"date":"2026-07-01","pid":"2667399","u":1,"r":28000,"p":17150,"o":1,"c":0},{"date":"2026-07-01","pid":"2843128","u":2,"r":53000,"p":31650,"o":2,"c":0},{"date":"2026-07-01","pid":"2843158","u":1,"r":53300,"p":34475,"o":1,"c":0},{"date":"2026-07-01","pid":"2844006","u":2,"r":71000,"p":42750,"o":2,"c":0},{"date":"2026-07-01","pid":"2845956","u":2,"r":102200,"p":75870,"o":2,"c":1},{"date":"2026-07-01","pid":"2847309","u":11,"r":291000,"p":175050,"o":10,"c":2},{"date":"2026-07-01","pid":"2847586","u":9,"r":260600,"p":161230,"o":9,"c":1},{"date":"2026-07-02","pid":"2658502","u":2,"r":79200,"p":52860,"o":2,"c":1},{"date":"2026-07-02","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-02","pid":"2663193","u":2,"r":131000,"p":81750,"o":2,"c":0},{"date":"2026-07-02","pid":"2667399","u":1,"r":93000,"p":68650,"o":1,"c":0},{"date":"2026-07-02","pid":"2843128","u":2,"r":55000,"p":33500,"o":2,"c":0},{"date":"2026-07-02","pid":"2845956","u":4,"r":204000,"p":151400,"o":3,"c":1},{"date":"2026-07-02","pid":"2846266","u":1,"r":45500,"p":30900,"o":1,"c":0},{"date":"2026-07-02","pid":"2847309","u":4,"r":92000,"p":52600,"o":3,"c":1},{"date":"2026-07-02","pid":"2847586","u":7,"r":236000,"p":152050,"o":7,"c":1},{"date":"2026-07-03","pid":"2658308","u":1,"r":35500,"p":25280,"o":1,"c":0},{"date":"2026-07-03","pid":"2658502","u":3,"r":128700,"p":87210,"o":3,"c":1},{"date":"2026-07-03","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-03","pid":"2662882","u":1,"r":415000,"p":323750,"o":1,"c":0},{"date":"2026-07-03","pid":"2663965","u":1,"r":91100,"p":61880,"o":1,"c":0},{"date":"2026-07-03","pid":"2667097","u":1,"r":90000,"p":64000,"o":1,"c":0},{"date":"2026-07-03","pid":"2667399","u":1,"r":28000,"p":17150,"o":1,"c":0},{"date":"2026-07-03","pid":"2843053","u":1,"r":65500,"p":46650,"o":1,"c":0},{"date":"2026-07-03","pid":"2843128","u":1,"r":27500,"p":16750,"o":1,"c":1},{"date":"2026-07-03","pid":"2843897","u":1,"r":57300,"p":40590,"o":1,"c":0},{"date":"2026-07-03","pid":"2844006","u":1,"r":35500,"p":21375,"o":1,"c":0},{"date":"2026-07-03","pid":"2844104","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-03","pid":"2845956","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-03","pid":"2847309","u":7,"r":166250,"p":96250,"o":7,"c":4},{"date":"2026-07-03","pid":"2847468","u":1,"r":150000,"p":106750,"o":1,"c":0},{"date":"2026-07-03","pid":"2847586","u":7,"r":238700,"p":154210,"o":7,"c":1},{"date":"2026-07-04","pid":"2658308","u":2,"r":67800,"p":47808,"o":2,"c":0},{"date":"2026-07-04","pid":"2663965","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-04","pid":"2667399","u":1,"r":93000,"p":68650,"o":1,"c":0},{"date":"2026-07-04","pid":"2843128","u":3,"r":82500,"p":50000,"o":3,"c":1},{"date":"2026-07-04","pid":"2843463","u":1,"r":68000,"p":46790,"o":1,"c":0},{"date":"2026-07-04","pid":"2845956","u":2,"r":108000,"p":80800,"o":2,"c":0},{"date":"2026-07-04","pid":"2846118","u":3,"r":321000,"p":256350,"o":1,"c":0},{"date":"2026-07-04","pid":"2847242","u":1,"r":57500,"p":39500,"o":1,"c":0},{"date":"2026-07-04","pid":"2847309","u":2,"r":49500,"p":29100,"o":2,"c":0},{"date":"2026-07-04","pid":"2847387","u":1,"r":32000,"p":20990,"o":1,"c":0},{"date":"2026-07-04","pid":"2847468","u":1,"r":50100,"p":32075,"o":1,"c":0},{"date":"2026-07-04","pid":"2847586","u":6,"r":182600,"p":114580,"o":6,"c":1},{"date":"2026-07-04","pid":"2885187","u":2,"r":134600,"p":95180,"o":2,"c":0},{"date":"2026-07-05","pid":"2658502","u":2,"r":59400,"p":37020,"o":2,"c":0},{"date":"2026-07-05","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-05","pid":"2659219","u":1,"r":32000,"p":18500,"o":1,"c":0},{"date":"2026-07-05","pid":"2662882","u":1,"r":525000,"p":411500,"o":1,"c":2},{"date":"2026-07-05","pid":"2663965","u":1,"r":91100,"p":61880,"o":1,"c":1},{"date":"2026-07-05","pid":"2667399","u":1,"r":28000,"p":17150,"o":1,"c":0},{"date":"2026-07-05","pid":"2828345","u":1,"r":50000,"p":34500,"o":1,"c":1},{"date":"2026-07-05","pid":"2843053","u":1,"r":65500,"p":46650,"o":1,"c":0},{"date":"2026-07-05","pid":"2843128","u":2,"r":55000,"p":33250,"o":2,"c":0},{"date":"2026-07-05","pid":"2845895","u":1,"r":60100,"p":43732,"o":1,"c":0},{"date":"2026-07-05","pid":"2845956","u":1,"r":54000,"p":40400,"o":1,"c":0},{"date":"2026-07-05","pid":"2846046","u":1,"r":65500,"p":47150,"o":1,"c":0},{"date":"2026-07-05","pid":"2847309","u":1,"r":24750,"p":14550,"o":1,"c":0},{"date":"2026-07-05","pid":"2847586","u":7,"r":251300,"p":164290,"o":4,"c":2},{"date":"2026-07-05","pid":"2885187","u":1,"r":67300,"p":47590,"o":1,"c":0},{"date":"2026-07-06","pid":"2658502","u":1,"r":29700,"p":18510,"o":1,"c":0},{"date":"2026-07-06","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-06","pid":"2661453","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-06","pid":"2662882","u":1,"r":415000,"p":323750,"o":1,"c":0},{"date":"2026-07-06","pid":"2663193","u":1,"r":65500,"p":40875,"o":1,"c":0},{"date":"2026-07-06","pid":"2663965","u":2,"r":182200,"p":123760,"o":2,"c":1},{"date":"2026-07-06","pid":"2828345","u":1,"r":44550,"p":30140,"o":1,"c":0},{"date":"2026-07-06","pid":"2843053","u":5,"r":327500,"p":232500,"o":5,"c":1},{"date":"2026-07-06","pid":"2843128","u":2,"r":55000,"p":33250,"o":2,"c":1},{"date":"2026-07-06","pid":"2843333","u":4,"r":622000,"p":431310,"o":2,"c":1},{"date":"2026-07-06","pid":"2843897","u":1,"r":57300,"p":40590,"o":1,"c":0},{"date":"2026-07-06","pid":"2845956","u":2,"r":108000,"p":80800,"o":2,"c":0},{"date":"2026-07-06","pid":"2846046","u":5,"r":327500,"p":235750,"o":1,"c":0},{"date":"2026-07-06","pid":"2846206","u":1,"r":56000,"p":39300,"o":1,"c":0},{"date":"2026-07-06","pid":"2847586","u":5,"r":177700,"p":115910,"o":5,"c":0},{"date":"2026-07-07","pid":"2658308","u":1,"r":55500,"p":42480,"o":1,"c":0},{"date":"2026-07-07","pid":"2658502","u":6,"r":178200,"p":111060,"o":4,"c":0},{"date":"2026-07-07","pid":"2658806","u":2,"r":114000,"p":75000,"o":2,"c":0},{"date":"2026-07-07","pid":"2662882","u":2,"r":1050000,"p":823000,"o":2,"c":0},{"date":"2026-07-07","pid":"2663193","u":1,"r":65500,"p":40875,"o":1,"c":0},{"date":"2026-07-07","pid":"2663965","u":4,"r":364000,"p":247200,"o":4,"c":1},{"date":"2026-07-07","pid":"2667097","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-07","pid":"2667399","u":2,"r":186000,"p":137300,"o":2,"c":0},{"date":"2026-07-07","pid":"2843053","u":2,"r":131000,"p":93300,"o":2,"c":1},{"date":"2026-07-07","pid":"2843128","u":5,"r":182000,"p":118350,"o":5,"c":0},{"date":"2026-07-07","pid":"2843158","u":2,"r":106600,"p":68950,"o":2,"c":0},{"date":"2026-07-07","pid":"2843255","u":1,"r":125500,"p":86115,"o":1,"c":0},{"date":"2026-07-07","pid":"2845956","u":4,"r":220000,"p":165000,"o":4,"c":1},{"date":"2026-07-07","pid":"2847309","u":2,"r":70000,"p":45500,"o":2,"c":0},{"date":"2026-07-07","pid":"2847586","u":11,"r":390980,"p":255034,"o":11,"c":0},{"date":"2026-07-08","pid":"2657904","u":1,"r":37000,"p":22250,"o":1,"c":0},{"date":"2026-07-08","pid":"2658308","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-08","pid":"2658502","u":2,"r":59400,"p":37020,"o":2,"c":0},{"date":"2026-07-08","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-08","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-07-08","pid":"2667097","u":1,"r":90000,"p":64000,"o":1,"c":0},{"date":"2026-07-08","pid":"2667399","u":2,"r":56000,"p":34300,"o":2,"c":0},{"date":"2026-07-08","pid":"2828345","u":2,"r":90000,"p":61000,"o":2,"c":0},{"date":"2026-07-08","pid":"2843053","u":2,"r":131000,"p":93300,"o":2,"c":0},{"date":"2026-07-08","pid":"2843128","u":1,"r":27000,"p":16100,"o":1,"c":0},{"date":"2026-07-08","pid":"2843255","u":1,"r":125000,"p":85750,"o":1,"c":0},{"date":"2026-07-08","pid":"2843333","u":1,"r":155000,"p":107400,"o":1,"c":0},{"date":"2026-07-08","pid":"2843402","u":1,"r":55000,"p":38750,"o":1,"c":0},{"date":"2026-07-08","pid":"2845956","u":1,"r":55000,"p":41250,"o":1,"c":0},{"date":"2026-07-08","pid":"2847242","u":1,"r":57500,"p":39500,"o":1,"c":0},{"date":"2026-07-08","pid":"2847586","u":9,"r":400100,"p":272830,"o":9,"c":2},{"date":"2026-07-08","pid":"2885187","u":3,"r":201900,"p":142770,"o":2,"c":0},{"date":"2026-07-09","pid":"2658308","u":1,"r":35500,"p":25280,"o":1,"c":0},{"date":"2026-07-09","pid":"2658502","u":3,"r":89100,"p":55530,"o":2,"c":0},{"date":"2026-07-09","pid":"2842914","u":1,"r":805000,"p":654100,"o":1,"c":0},{"date":"2026-07-09","pid":"2843053","u":4,"r":262000,"p":186600,"o":4,"c":0},{"date":"2026-07-09","pid":"2843128","u":4,"r":152000,"p":99600,"o":4,"c":0},{"date":"2026-07-09","pid":"2843255","u":2,"r":250000,"p":171750,"o":2,"c":0},{"date":"2026-07-09","pid":"2844006","u":1,"r":35500,"p":21375,"o":1,"c":0},{"date":"2026-07-09","pid":"2845956","u":3,"r":165000,"p":123750,"o":3,"c":0},{"date":"2026-07-09","pid":"2847309","u":2,"r":50000,"p":29500,"o":2,"c":0},{"date":"2026-07-09","pid":"2847468","u":1,"r":120000,"p":84250,"o":1,"c":0},{"date":"2026-07-09","pid":"2847586","u":4,"r":172400,"p":116920,"o":4,"c":1},{"date":"2026-07-10","pid":"2658308","u":3,"r":100100,"p":70336,"o":3,"c":0},{"date":"2026-07-10","pid":"2658502","u":1,"r":29700,"p":18510,"o":1,"c":0},{"date":"2026-07-10","pid":"2658806","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-10","pid":"2662882","u":1,"r":415000,"p":323750,"o":1,"c":0},{"date":"2026-07-10","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-07-10","pid":"2667399","u":1,"r":28000,"p":17150,"o":1,"c":0},{"date":"2026-07-10","pid":"2843053","u":3,"r":196500,"p":139950,"o":3,"c":0},{"date":"2026-07-10","pid":"2843128","u":3,"r":125000,"p":83500,"o":2,"c":0},{"date":"2026-07-10","pid":"2843158","u":1,"r":53300,"p":34475,"o":1,"c":0},{"date":"2026-07-10","pid":"2843255","u":1,"r":125000,"p":86000,"o":1,"c":0},{"date":"2026-07-10","pid":"2845956","u":1,"r":55000,"p":41250,"o":1,"c":0},{"date":"2026-07-10","pid":"2847586","u":3,"r":129300,"p":87690,"o":3,"c":1},{"date":"2026-07-10","pid":"2885187","u":1,"r":67300,"p":47590,"o":1,"c":0},{"date":"2026-07-11","pid":"2658308","u":2,"r":91700,"p":68362,"o":2,"c":2},{"date":"2026-07-11","pid":"2663965","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-11","pid":"2667399","u":2,"r":56000,"p":34300,"o":2,"c":0},{"date":"2026-07-11","pid":"2843053","u":2,"r":131000,"p":93300,"o":2,"c":0},{"date":"2026-07-11","pid":"2843128","u":3,"r":125000,"p":83750,"o":3,"c":0},{"date":"2026-07-11","pid":"2844104","u":1,"r":53300,"p":33159,"o":1,"c":0},{"date":"2026-07-11","pid":"2847468","u":0,"r":0,"p":0,"o":0,"c":2},{"date":"2026-07-11","pid":"2847586","u":4,"r":160480,"p":107384,"o":4,"c":0},{"date":"2026-07-11","pid":"2885187","u":1,"r":67300,"p":47590,"o":1,"c":0},{"date":"2026-07-12","pid":"2658308","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-12","pid":"2658502","u":2,"r":59400,"p":37020,"o":1,"c":0},{"date":"2026-07-12","pid":"2658806","u":2,"r":114000,"p":75000,"o":2,"c":0},{"date":"2026-07-12","pid":"2843053","u":4,"r":262000,"p":186600,"o":4,"c":0},{"date":"2026-07-12","pid":"2843158","u":1,"r":53300,"p":34475,"o":1,"c":0},{"date":"2026-07-12","pid":"2843255","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-12","pid":"2843333","u":1,"r":155000,"p":107400,"o":1,"c":0},{"date":"2026-07-12","pid":"2843402","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-12","pid":"2845895","u":1,"r":60100,"p":43732,"o":1,"c":0},{"date":"2026-07-12","pid":"2847586","u":4,"r":147120,"p":96696,"o":4,"c":2},{"date":"2026-07-13","pid":"2658308","u":1,"r":35500,"p":25280,"o":1,"c":0},{"date":"2026-07-13","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-13","pid":"2663193","u":2,"r":131000,"p":81750,"o":2,"c":0},{"date":"2026-07-13","pid":"2667399","u":4,"r":144450,"p":94310,"o":4,"c":0},{"date":"2026-07-13","pid":"2842983","u":1,"r":93500,"p":62875,"o":1,"c":0},{"date":"2026-07-13","pid":"2843053","u":2,"r":131000,"p":93300,"o":2,"c":0},{"date":"2026-07-13","pid":"2843128","u":1,"r":71000,"p":51300,"o":1,"c":0},{"date":"2026-07-13","pid":"2843255","u":1,"r":125000,"p":85750,"o":1,"c":0},{"date":"2026-07-13","pid":"2845956","u":2,"r":110000,"p":82500,"o":2,"c":0},{"date":"2026-07-13","pid":"2845985","u":1,"r":73500,"p":49875,"o":1,"c":0},{"date":"2026-07-13","pid":"2847309","u":1,"r":35000,"p":22750,"o":1,"c":0},{"date":"2026-07-13","pid":"2847586","u":3,"r":129300,"p":87690,"o":3,"c":0},{"date":"2026-07-14","pid":"2658308","u":1,"r":32300,"p":22528,"o":1,"c":0},{"date":"2026-07-14","pid":"2658502","u":2,"r":59700,"p":37260,"o":2,"c":0},{"date":"2026-07-14","pid":"2658806","u":4,"r":228000,"p":150000,"o":3,"c":0},{"date":"2026-07-14","pid":"2662663","u":2,"r":36000,"p":11500,"o":1,"c":0},{"date":"2026-07-14","pid":"2663965","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-14","pid":"2843053","u":1,"r":65500,"p":46650,"o":1,"c":0},{"date":"2026-07-14","pid":"2843128","u":2,"r":98500,"p":67800,"o":2,"c":0},{"date":"2026-07-14","pid":"2844006","u":1,"r":35500,"p":21375,"o":1,"c":0},{"date":"2026-07-14","pid":"2846266","u":1,"r":45500,"p":30900,"o":1,"c":0},{"date":"2026-07-14","pid":"2847309","u":1,"r":25000,"p":14750,"o":1,"c":0},{"date":"2026-07-14","pid":"2847586","u":7,"r":277300,"p":185090,"o":7,"c":0},{"date":"2026-07-14","pid":"2885187","u":1,"r":67300,"p":47590,"o":1,"c":0},{"date":"2026-07-15","pid":"2658308","u":1,"r":32300,"p":22528,"o":1,"c":0},{"date":"2026-07-15","pid":"2658806","u":2,"r":114000,"p":75000,"o":2,"c":0},{"date":"2026-07-15","pid":"2663193","u":1,"r":65000,"p":40500,"o":1,"c":0},{"date":"2026-07-15","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-07-15","pid":"2842914","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-15","pid":"2843053","u":1,"r":65500,"p":46650,"o":1,"c":0},{"date":"2026-07-15","pid":"2843128","u":1,"r":27500,"p":16750,"o":1,"c":0},{"date":"2026-07-15","pid":"2844104","u":1,"r":50300,"p":30969,"o":1,"c":0},{"date":"2026-07-15","pid":"2845956","u":1,"r":54000,"p":40400,"o":1,"c":0},{"date":"2026-07-15","pid":"2847387","u":1,"r":32000,"p":20990,"o":1,"c":0},{"date":"2026-07-15","pid":"2847586","u":9,"r":448300,"p":311390,"o":6,"c":1},{"date":"2026-07-15","pid":"2885187","u":1,"r":67300,"p":47590,"o":1,"c":0},{"date":"2026-07-16","pid":"2658308","u":1,"r":32300,"p":22528,"o":1,"c":1},{"date":"2026-07-16","pid":"2663965","u":2,"r":182000,"p":123600,"o":2,"c":0},{"date":"2026-07-16","pid":"2842914","u":1,"r":805000,"p":654100,"o":1,"c":0},{"date":"2026-07-16","pid":"2843053","u":2,"r":98250,"p":60550,"o":2,"c":0},{"date":"2026-07-16","pid":"2843128","u":3,"r":82500,"p":50250,"o":3,"c":1},{"date":"2026-07-16","pid":"2843255","u":1,"r":62500,"p":23500,"o":1,"c":0},{"date":"2026-07-16","pid":"2843402","u":1,"r":55000,"p":38750,"o":1,"c":0},{"date":"2026-07-16","pid":"2845895","u":1,"r":30050,"p":13682,"o":1,"c":0},{"date":"2026-07-16","pid":"2846206","u":1,"r":28000,"p":11300,"o":1,"c":0},{"date":"2026-07-16","pid":"2847468","u":1,"r":47000,"p":29750,"o":1,"c":0},{"date":"2026-07-17","pid":"2658308","u":1,"r":32300,"p":22528,"o":1,"c":0},{"date":"2026-07-17","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-17","pid":"2663965","u":2,"r":182000,"p":123600,"o":2,"c":0},{"date":"2026-07-17","pid":"2843128","u":3,"r":126000,"p":84800,"o":3,"c":0},{"date":"2026-07-17","pid":"2843158","u":2,"r":106600,"p":68950,"o":1,"c":0},{"date":"2026-07-17","pid":"2843402","u":2,"r":110000,"p":77500,"o":2,"c":0},{"date":"2026-07-17","pid":"2845956","u":2,"r":108000,"p":80800,"o":2,"c":0},{"date":"2026-07-17","pid":"2847586","u":1,"r":79000,"p":57950,"o":1,"c":0},{"date":"2026-07-18","pid":"2658502","u":2,"r":59400,"p":37020,"o":2,"c":0},{"date":"2026-07-18","pid":"2843053","u":1,"r":65500,"p":46650,"o":1,"c":0},{"date":"2026-07-18","pid":"2843128","u":4,"r":197000,"p":136100,"o":4,"c":1},{"date":"2026-07-18","pid":"2843158","u":1,"r":53300,"p":34475,"o":1,"c":0},{"date":"2026-07-18","pid":"2843255","u":1,"r":125000,"p":85750,"o":1,"c":0},{"date":"2026-07-18","pid":"2845985","u":0,"r":0,"p":0,"o":0,"c":1},{"date":"2026-07-18","pid":"2847468","u":2,"r":94000,"p":59500,"o":2,"c":0},{"date":"2026-07-18","pid":"2847586","u":3,"r":237000,"p":173850,"o":3,"c":0},{"date":"2026-07-18","pid":"2885187","u":1,"r":67300,"p":47590,"o":1,"c":0},{"date":"2026-07-19","pid":"2658308","u":2,"r":64600,"p":45056,"o":2,"c":0},{"date":"2026-07-19","pid":"2658806","u":2,"r":114000,"p":75000,"o":2,"c":1},{"date":"2026-07-19","pid":"2662663","u":1,"r":18000,"p":5750,"o":1,"c":0},{"date":"2026-07-19","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-07-19","pid":"2842914","u":1,"r":805000,"p":654100,"o":1,"c":0},{"date":"2026-07-19","pid":"2843053","u":1,"r":65500,"p":46650,"o":1,"c":0},{"date":"2026-07-19","pid":"2843128","u":2,"r":98500,"p":68050,"o":2,"c":0},{"date":"2026-07-19","pid":"2843402","u":1,"r":55000,"p":38750,"o":1,"c":0},{"date":"2026-07-19","pid":"2843463","u":1,"r":68000,"p":46790,"o":1,"c":0},{"date":"2026-07-19","pid":"2846046","u":1,"r":65500,"p":47150,"o":1,"c":0},{"date":"2026-07-19","pid":"2847586","u":2,"r":158000,"p":115900,"o":2,"c":0},{"date":"2026-07-20","pid":"2658806","u":3,"r":171000,"p":112500,"o":3,"c":0},{"date":"2026-07-20","pid":"2662663","u":1,"r":27000,"p":12500,"o":1,"c":0},{"date":"2026-07-20","pid":"2663965","u":1,"r":91000,"p":61800,"o":1,"c":0},{"date":"2026-07-20","pid":"2843053","u":3,"r":196500,"p":139950,"o":3,"c":0},{"date":"2026-07-20","pid":"2843128","u":2,"r":98500,"p":68050,"o":2,"c":0},{"date":"2026-07-20","pid":"2843402","u":1,"r":55000,"p":38750,"o":1,"c":0},{"date":"2026-07-20","pid":"2843463","u":1,"r":72000,"p":50160,"o":1,"c":0},{"date":"2026-07-20","pid":"2847309","u":1,"r":25000,"p":14750,"o":1,"c":0},{"date":"2026-07-20","pid":"2847387","u":1,"r":32000,"p":20990,"o":1,"c":0},{"date":"2026-07-21","pid":"2658308","u":1,"r":32300,"p":22528,"o":1,"c":0},{"date":"2026-07-21","pid":"2658502","u":1,"r":29700,"p":18510,"o":1,"c":0},{"date":"2026-07-21","pid":"2663965","u":2,"r":182000,"p":123600,"o":2,"c":0},{"date":"2026-07-21","pid":"2843053","u":3,"r":196500,"p":139950,"o":3,"c":0},{"date":"2026-07-21","pid":"2843255","u":1,"r":125000,"p":85750,"o":1,"c":0},{"date":"2026-07-21","pid":"2843402","u":1,"r":65000,"p":46750,"o":1,"c":0},{"date":"2026-07-21","pid":"2844104","u":1,"r":60000,"p":38050,"o":1,"c":0},{"date":"2026-07-22","pid":"2658806","u":1,"r":57000,"p":37500,"o":1,"c":0},{"date":"2026-07-22","pid":"2662663","u":1,"r":21000,"p":8000,"o":1,"c":0},{"date":"2026-07-22","pid":"2842983","u":1,"r":93500,"p":62875,"o":1,"c":0},{"date":"2026-07-22","pid":"2843128","u":1,"r":71000,"p":51300,"o":1,"c":0},{"date":"2026-07-22","pid":"2843463","u":1,"r":72000,"p":50160,"o":1,"c":0}],"log":[{"date":"2026-07-21","pid":"2657904","rank":"C","price":40000,"stock":39,"sold":1,"viewers":152,"conv":1.32},{"date":"2026-07-21","pid":"2658091","rank":"D","price":65000,"stock":0,"sold":1,"viewers":123,"conv":0.81},{"date":"2026-07-21","pid":"2658308","rank":"B","price":35000,"stock":123,"sold":35,"viewers":507,"conv":6.11},{"date":"2026-07-21","pid":"2658502","rank":"A","price":29700,"stock":15,"sold":74,"viewers":840,"conv":7.86},{"date":"2026-07-21","pid":"2658640","rank":"C","price":24000,"stock":0,"sold":5,"viewers":157,"conv":3.18},{"date":"2026-07-21","pid":"2658806","rank":"A","price":60000,"stock":35,"sold":45,"viewers":1014,"conv":4.04},{"date":"2026-07-21","pid":"2659116","rank":"B","price":85000,"stock":0,"sold":2,"viewers":246,"conv":0.41},{"date":"2026-07-21","pid":"2659219","rank":"D","price":40000,"stock":38,"sold":2,"viewers":57,"conv":3.51},{"date":"2026-07-21","pid":"2661453","rank":"C","price":55000,"stock":90,"sold":0,"viewers":63,"conv":1.59},{"date":"2026-07-21","pid":"2661858","rank":"D","price":83000,"stock":30,"sold":0,"viewers":89,"conv":0.0},{"date":"2026-07-21","pid":"2662663","rank":"D","price":23000,"stock":116,"sold":4,"viewers":54,"conv":3.7},{"date":"2026-07-21","pid":"2662882","rank":"A","price":450000,"stock":0,"sold":10,"viewers":1459,"conv":0.89},{"date":"2026-07-21","pid":"2663193","rank":"D","price":70000,"stock":164,"sold":7,"viewers":174,"conv":3.45},{"date":"2026-07-21","pid":"2663965","rank":"A","price":95000,"stock":3,"sold":35,"viewers":948,"conv":4.01},{"date":"2026-07-21","pid":"2667097","rank":"B","price":100000,"stock":0,"sold":5,"viewers":292,"conv":2.4},{"date":"2026-07-21","pid":"2667399","rank":"A","price":30000,"stock":0,"sold":35,"viewers":405,"conv":7.65},{"date":"2026-07-21","pid":"2667982","rank":"D","price":160000,"stock":0,"sold":0,"viewers":290,"conv":0.34},{"date":"2026-07-21","pid":"2828345","rank":"D","price":45000,"stock":0,"sold":4,"viewers":115,"conv":4.35},{"date":"2026-07-21","pid":"2842914","rank":"D","price":840000,"stock":2,"sold":3,"viewers":1136,"conv":0.35},{"date":"2026-07-21","pid":"2842983","rank":"D","price":110000,"stock":19,"sold":1,"viewers":49,"conv":2.04},{"date":"2026-07-21","pid":"2843053","rank":"B","price":75000,"stock":359,"sold":41,"viewers":748,"conv":4.68},{"date":"2026-07-21","pid":"2843128","rank":"B","price":30000,"stock":25,"sold":54,"viewers":551,"conv":9.8},{"date":"2026-07-21","pid":"2843158","rank":"D","price":60000,"stock":32,"sold":8,"viewers":104,"conv":6.73},{"date":"2026-07-21","pid":"2843255","rank":"D","price":140000,"stock":50,"sold":10,"viewers":143,"conv":8.39},{"date":"2026-07-21","pid":"2843333","rank":"B","price":165000,"stock":67,"sold":7,"viewers":82,"conv":4.88},{"date":"2026-07-21","pid":"2843402","rank":"D","price":65000,"stock":30,"sold":8,"viewers":238,"conv":2.94},{"date":"2026-07-21","pid":"2843463","rank":"D","price":75000,"stock":36,"sold":4,"viewers":179,"conv":1.68},{"date":"2026-07-21","pid":"2843588","rank":"D","price":65000,"stock":92,"sold":0,"viewers":59,"conv":0.0},{"date":"2026-07-21","pid":"2843897","rank":"D","price":65000,"stock":33,"sold":2,"viewers":51,"conv":3.92},{"date":"2026-07-21","pid":"2844006","rank":"B","price":40000,"stock":19,"sold":7,"viewers":196,"conv":3.57},{"date":"2026-07-21","pid":"2844104","rank":"B","price":60000,"stock":33,"sold":7,"viewers":152,"conv":6.58},{"date":"2026-07-21","pid":"2845895","rank":"B","price":70000,"stock":28,"sold":8,"viewers":94,"conv":6.38},{"date":"2026-07-21","pid":"2845956","rank":"A","price":60000,"stock":0,"sold":30,"viewers":271,"conv":11.81},{"date":"2026-07-21","pid":"2845985","rank":"D","price":85000,"stock":18,"sold":2,"viewers":41,"conv":4.88},{"date":"2026-07-21","pid":"2846046","rank":"D","price":75000,"stock":22,"sold":8,"viewers":176,"conv":2.27},{"date":"2026-07-21","pid":"2846118","rank":"B","price":125000,"stock":35,"sold":5,"viewers":187,"conv":1.6},{"date":"2026-07-21","pid":"2846160","rank":"D","price":75000,"stock":20,"sold":0,"viewers":42,"conv":0.0},{"date":"2026-07-21","pid":"2846206","rank":"D","price":65000,"stock":20,"sold":2,"viewers":29,"conv":6.9},{"date":"2026-07-21","pid":"2846266","rank":"D","price":50000,"stock":21,"sold":3,"viewers":89,"conv":4.49},{"date":"2026-07-21","pid":"2847242","rank":"D","price":65000,"stock":32,"sold":3,"viewers":41,"conv":7.32},{"date":"2026-07-21","pid":"2847309","rank":"A","price":23000,"stock":0,"sold":70,"viewers":641,"conv":10.61},{"date":"2026-07-21","pid":"2847387","rank":"D","price":33100,"stock":57,"sold":3,"viewers":37,"conv":5.41},{"date":"2026-07-21","pid":"2847468","rank":"B","price":60500,"stock":164,"sold":6,"viewers":754,"conv":1.06},{"date":"2026-07-21","pid":"2847586","rank":"A","price":18000,"stock":37,"sold":157,"viewers":1456,"conv":11.06},{"date":"2026-07-21","pid":"2885187","rank":"B","price":70000,"stock":23,"sold":12,"viewers":86,"conv":11.63},{"date":"2026-07-21","pid":"2885239","rank":"D","price":225500,"stock":30,"sold":0,"viewers":82,"conv":0.0},{"date":"2026-07-21","pid":"3061376","rank":"D","price":65000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-21","pid":"3061428","rank":"D","price":24000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-21","pid":"3061483","rank":"D","price":85000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-21","pid":"3061510","rank":"D","price":45000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-21","pid":"3061540","rank":"D","price":160000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-21","pid":"3061577","rank":"D","price":30000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-21","pid":"3061628","rank":"D","price":100000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-22","pid":"2657904","rank":"C","price":35500,"stock":39,"sold":1,"viewers":152,"conv":1.32},{"date":"2026-07-22","pid":"2658091","rank":"D","price":65000,"stock":0,"sold":1,"viewers":123,"conv":0.81},{"date":"2026-07-22","pid":"2658308","rank":"B","price":32500,"stock":123,"sold":35,"viewers":507,"conv":6.11},{"date":"2026-07-22","pid":"2658502","rank":"A","price":29700,"stock":15,"sold":74,"viewers":840,"conv":7.86},{"date":"2026-07-22","pid":"2658640","rank":"C","price":24000,"stock":0,"sold":5,"viewers":157,"conv":3.18},{"date":"2026-07-22","pid":"2658806","rank":"A","price":57000,"stock":34,"sold":46,"viewers":1014,"conv":4.04},{"date":"2026-07-22","pid":"2659116","rank":"B","price":85000,"stock":0,"sold":2,"viewers":246,"conv":0.41},{"date":"2026-07-22","pid":"2659219","rank":"D","price":32000,"stock":38,"sold":2,"viewers":57,"conv":3.51},{"date":"2026-07-22","pid":"2661453","rank":"C","price":50000,"stock":90,"sold":0,"viewers":63,"conv":1.59},{"date":"2026-07-22","pid":"2661858","rank":"D","price":75000,"stock":30,"sold":0,"viewers":89,"conv":0.0},{"date":"2026-07-22","pid":"2662663","rank":"D","price":18000,"stock":115,"sold":5,"viewers":54,"conv":3.7},{"date":"2026-07-22","pid":"2662882","rank":"A","price":450000,"stock":0,"sold":10,"viewers":1459,"conv":0.89},{"date":"2026-07-22","pid":"2663193","rank":"D","price":65000,"stock":164,"sold":7,"viewers":174,"conv":3.45},{"date":"2026-07-22","pid":"2663965","rank":"A","price":91000,"stock":3,"sold":35,"viewers":948,"conv":4.01},{"date":"2026-07-22","pid":"2667097","rank":"B","price":100000,"stock":0,"sold":5,"viewers":292,"conv":2.4},{"date":"2026-07-22","pid":"2667399","rank":"A","price":30000,"stock":0,"sold":35,"viewers":405,"conv":7.65},{"date":"2026-07-22","pid":"2667982","rank":"D","price":160000,"stock":0,"sold":0,"viewers":290,"conv":0.34},{"date":"2026-07-22","pid":"2828345","rank":"D","price":45000,"stock":0,"sold":4,"viewers":115,"conv":4.35},{"date":"2026-07-22","pid":"2842914","rank":"D","price":805000,"stock":2,"sold":3,"viewers":1136,"conv":0.35},{"date":"2026-07-22","pid":"2842983","rank":"D","price":93500,"stock":18,"sold":2,"viewers":49,"conv":2.04},{"date":"2026-07-22","pid":"2843053","rank":"B","price":65500,"stock":359,"sold":41,"viewers":748,"conv":4.68},{"date":"2026-07-22","pid":"2843128","rank":"B","price":27500,"stock":24,"sold":55,"viewers":551,"conv":9.8},{"date":"2026-07-22","pid":"2843158","rank":"D","price":53300,"stock":32,"sold":8,"viewers":104,"conv":6.73},{"date":"2026-07-22","pid":"2843255","rank":"D","price":125000,"stock":50,"sold":10,"viewers":143,"conv":8.39},{"date":"2026-07-22","pid":"2843333","rank":"B","price":155000,"stock":67,"sold":7,"viewers":82,"conv":4.88},{"date":"2026-07-22","pid":"2843402","rank":"D","price":55000,"stock":30,"sold":8,"viewers":238,"conv":2.94},{"date":"2026-07-22","pid":"2843463","rank":"D","price":68000,"stock":35,"sold":5,"viewers":179,"conv":1.68},{"date":"2026-07-22","pid":"2843588","rank":"D","price":57000,"stock":92,"sold":0,"viewers":59,"conv":0.0},{"date":"2026-07-22","pid":"2843897","rank":"D","price":57300,"stock":33,"sold":2,"viewers":51,"conv":3.92},{"date":"2026-07-22","pid":"2844006","rank":"B","price":35500,"stock":19,"sold":7,"viewers":196,"conv":3.57},{"date":"2026-07-22","pid":"2844104","rank":"B","price":50300,"stock":32,"sold":8,"viewers":152,"conv":6.58},{"date":"2026-07-22","pid":"2845895","rank":"B","price":60100,"stock":28,"sold":8,"viewers":94,"conv":6.38},{"date":"2026-07-22","pid":"2845956","rank":"A","price":60000,"stock":0,"sold":30,"viewers":271,"conv":11.81},{"date":"2026-07-22","pid":"2845985","rank":"D","price":73500,"stock":18,"sold":1,"viewers":41,"conv":4.88},{"date":"2026-07-22","pid":"2846046","rank":"D","price":63500,"stock":22,"sold":8,"viewers":176,"conv":2.27},{"date":"2026-07-22","pid":"2846118","rank":"B","price":107000,"stock":35,"sold":5,"viewers":187,"conv":1.6},{"date":"2026-07-22","pid":"2846160","rank":"D","price":71000,"stock":20,"sold":0,"viewers":42,"conv":0.0},{"date":"2026-07-22","pid":"2846206","rank":"D","price":56000,"stock":20,"sold":2,"viewers":29,"conv":6.9},{"date":"2026-07-22","pid":"2846266","rank":"D","price":45500,"stock":21,"sold":3,"viewers":89,"conv":4.49},{"date":"2026-07-22","pid":"2847242","rank":"D","price":57500,"stock":32,"sold":3,"viewers":41,"conv":7.32},{"date":"2026-07-22","pid":"2847309","rank":"A","price":23000,"stock":0,"sold":70,"viewers":641,"conv":10.61},{"date":"2026-07-22","pid":"2847387","rank":"D","price":32000,"stock":57,"sold":3,"viewers":37,"conv":5.41},{"date":"2026-07-22","pid":"2847468","rank":"B","price":47000,"stock":164,"sold":6,"viewers":754,"conv":1.06},{"date":"2026-07-22","pid":"2847586","rank":"A","price":17820,"stock":37,"sold":157,"viewers":1456,"conv":11.06},{"date":"2026-07-22","pid":"2885187","rank":"B","price":67300,"stock":23,"sold":12,"viewers":86,"conv":11.63},{"date":"2026-07-22","pid":"2885239","rank":"D","price":210000,"stock":30,"sold":0,"viewers":82,"conv":0.0},{"date":"2026-07-22","pid":"3061376","rank":"D","price":65000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-22","pid":"3061428","rank":"D","price":24000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-22","pid":"3061483","rank":"D","price":85000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-22","pid":"3061510","rank":"D","price":45000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-22","pid":"3061540","rank":"D","price":160000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-22","pid":"3061577","rank":"D","price":30000,"stock":0,"sold":0,"viewers":0,"conv":null},{"date":"2026-07-22","pid":"3061628","rank":"D","price":100000,"stock":0,"sold":0,"viewers":0,"conv":null}],"keys":[]};
+
+/* ---------- state ---------- */
+const S = { period:7, sig:'all', q:'', sort:{key:'rev', dir:-1}, metric:'units' };
+const $ = id => document.getElementById(id);
+const esc = s => String(s == null ? '' : s);
+
+/* ---------- theme ---------- */
+(function initTheme(){
+  const saved = localStorage.getItem('uzumDashTheme');
+  if (saved) document.documentElement.dataset.theme = saved;
+  $('themeBtn').addEventListener('click', () => {
+    const cur = document.documentElement.dataset.theme ||
+      (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem('uzumDashTheme', next);
+    renderAll();
+  });
+})();
+
+/* ---------- data prep ---------- */
+const anchor = DATA.today;                       // дата снимка — якорь всех окон
+const D = s => new Date(s + 'T12:00:00');           // полдень: без сдвигов UTC/DST
+const iso = d => d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') +
+  '-' + String(d.getDate()).padStart(2,'0');        // локальная дата, НЕ toISOString (UTC)
+const addDays = (s, n) => { const d = D(s); d.setDate(d.getDate() + n); return iso(d); };
+
+const sales = {};                                // pid -> { date -> {u,r,p,o,c} }
+let minDate = anchor;
+for (const r of DATA.sales) {
+  (sales[r.pid] ||= {})[r.date] = r;
+  if (r.date < minDate) minDate = r.date;
+}
+const availDays = Math.round((D(anchor) - D(minDate)) / 864e5) + 1;
+
+const logByPid = {};                             // pid -> [ {date,...} ] (по возрастанию даты)
+for (const r of DATA.log) (logByPid[r.pid] ||= []).push(r);
+const keysByPid = {};
+for (const r of DATA.keys) (keysByPid[r.pid] ||= []).push(r);
+
+function sumWin(pid, from, to) {                 // сумма за [from..to] включительно
+  const byDate = sales[pid] || {};
+  const acc = {u:0, r:0, p:0, o:0, c:0};
+  for (let d = from; d <= to; d = addDays(d, 1)) {
+    const v = byDate[d];
+    if (v) { acc.u += v.u; acc.r += v.r; acc.p += v.p; acc.o += v.o; acc.c += v.c; }
+  }
+  return acc;
+}
+
+function cardAgg(c, P) {
+  const cur  = sumWin(c.pid, addDays(anchor, -(P - 1)), anchor);
+  const prevOk = availDays >= 2 * P;
+  const prev = prevOk ? sumWin(c.pid, addDays(anchor, -(2*P - 1)), addDays(anchor, -P)) : null;
+  const L = Math.min(2 * P, availDays);
+  const rate = sumWin(c.pid, addDays(anchor, -(L - 1)), anchor).u / L;
+  const stockDaysRaw = rate > 0 ? c.stock / rate : null;   // порог считаем по сырому
+  const stockDays = stockDaysRaw === null ? null : Math.round(stockDaysRaw);
+  return { cur, prev, stockDaysRaw, stockDays,
+           u2p: sumWin(c.pid, addDays(anchor, -(2*P - 1)), anchor).u };
+}
+
+/* Сигнал — зеркало Python signal() в uzum_portfolio.py: при P=7 формулировки, пороги
+   и порядок правил совпадают дословно, чтобы дашборд не расходился с xlsx/Sheets.
+   Менять только синхронно с Python. */
+function signal(c, a) {
+  const { cur, prev, stockDaysRaw, stockDays, u2p } = a;
+  const P2 = 2 * S.period;                       // окно «нет продаж»: 14д при P=7
+  const unit = S.period === 7 ? ' шт/нед' : ' шт/' + S.period + 'д';
+  if (c.moderation !== 'MODERATED') return { cls:'crit', icon:'⛔', txt:'модерация: ' + c.moderation, bucket:'act' };
+  if (c.status !== 'IN_STOCK')      return { cls:'crit', icon:'⛔', txt:'не в продаже (' + c.status + ')', bucket:'act' };
+  if (c.stock === 0)                return { cls:'crit', icon:'🔴', txt:'остаток 0 — пополнить', bucket:'act' };
+  if (u2p === 0 && c.viewers < 30)  return { cls:'crit', icon:'🔴', txt:'нет трафика и продаж ' + P2 + 'д — ключи/SEO', bucket:'act' };
+  if (u2p === 0)                    return { cls:'crit', icon:'🔴', txt:'трафик есть, продаж нет ' + P2 + 'д — цена/фото/отзывы', bucket:'act' };
+  if (stockDaysRaw !== null && stockDaysRaw < 14)   // порог по сырому значению, как в Python
+    return { cls:'warn', icon:'🟡', txt:'остатка ~' + stockDays + ' дн — дозаказ', bucket:'warn' };
+  if (c.viewers >= 100 && c.conv !== null && c.conv < 1)
+    return { cls:'warn', icon:'🟡', txt:'конверсия <1% при трафике — цена/фото', bucket:'warn' };
+  if (prev && cur.u < prev.u * 0.7 && prev.u >= 3)
+    return { cls:'warn', icon:'🟡', txt:'продажи падают (' + prev.u + '→' + cur.u + unit + ')', bucket:'warn' };
+  if (prev && cur.u > prev.u)
+    return { cls:'good', icon:'🟢', txt:'рост (' + prev.u + '→' + cur.u + unit + ')', bucket:'ok' };
+  return { cls:'good', icon:'🟢', txt:'стабильно', bucket:'ok' };
+}
+
+/* ---------- formatting ---------- */
+const nf = new Intl.NumberFormat('ru-RU');
+const MINUS = '−';                                   // единый минус во всём дашборде
+const sign = s => String(s).replace(/-/g, MINUS);
+const fmtI = v => sign(nf.format(Math.round(v)));
+function fmtMoney(v) {
+  const a = Math.abs(v);
+  if (a >= 1e9) return sign((v/1e9).toLocaleString('ru-RU', {maximumFractionDigits:2})) + ' млрд';
+  if (a >= 1e6) return sign((v/1e6).toLocaleString('ru-RU', {maximumFractionDigits:2})) + ' млн';
+  if (a >= 1e4 && a < 1e6)                                 // без «1 000 тыс» — это уже млн
+    return sign((v/1e3).toLocaleString('ru-RU', {maximumFractionDigits:0})) + ' тыс';
+  return fmtI(v);
+}
+const fmtDate = s => { const d = D(s);
+  return String(d.getDate()).padStart(2,'0') + '.' + String(d.getMonth()+1).padStart(2,'0'); };
+const el = (tag, cls, text) => { const e = document.createElement(tag);
+  if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+/* ---------- KPIs ---------- */
+function renderKpis(rows) {
+  const k = $('kpis'); k.textContent = '';
+  const sum = f => rows.reduce((s, r) => s + f(r), 0);
+  const rev = sum(r => r.a.cur.r), prof = sum(r => r.a.cur.p), units = sum(r => r.a.cur.u);
+  const prevOk = availDays >= 2 * S.period;
+  const pRev = prevOk ? sum(r => r.a.prev.r) : null, pU = prevOk ? sum(r => r.a.prev.u) : null;
+  const act = rows.filter(r => r.sig.bucket === 'act').length;
+  const withSales = rows.filter(r => r.a.cur.u > 0).length;
+  const pProf = prevOk ? sum(r => r.a.prev.p) : null;
+  const tiles = [
+    { lbl:'Выручка за ' + S.period + ' дн', val: fmtMoney(rev) + ' сум', d: pRev, cur: rev, money:true, hero:true },
+    { lbl:'Прибыль за ' + S.period + ' дн', val: fmtMoney(prof) + ' сум', d: pProf, cur: prof, money:true },
+    { lbl:'Продажи, шт', val: fmtI(units), d: pU, cur: units },
+    { lbl:'Карточек с продажами', val: withSales + ' из ' + rows.length },
+    { lbl:'Требуют действия', val: String(act) },
+  ];
+  for (const t of tiles) {
+    const tile = el('div', 'tile' + (t.hero ? ' hero' : ''));
+    tile.appendChild(el('div', 'lbl', t.lbl));
+    tile.appendChild(el('div', 'val', t.val));
+    if (t.d !== undefined) {
+      const dl = el('div', 'delta');
+      if (t.d === null) dl.textContent = 'пред. период: н/д (истории < ' + (2*S.period) + ' дн)';
+      else {
+        const diff = t.cur - t.d;
+        dl.textContent = (diff >= 0 ? '+' : MINUS) +
+          (t.money ? fmtMoney(Math.abs(diff)) : fmtI(Math.abs(diff))) +
+          ' к пред. ' + S.period + ' дн';
+        dl.classList.add(diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat');
+      }
+      tile.appendChild(dl);
+    }
+    k.appendChild(tile);
+  }
+}
+
+/* ---------- signal chips ---------- */
+function renderChips(rowsAll) {
+  const counts = { all: rowsAll.length, act:0, warn:0, ok:0 };
+  for (const r of rowsAll) counts[r.sig.bucket]++;
+  const defs = [ ['all','Все'], ['act','🔴 Действовать'], ['warn','🟡 Внимание'], ['ok','🟢 Ок'] ];
+  const box = $('sigChips'); box.textContent = '';
+  for (const [key, lbl] of defs) {
+    const b = el('button', 'chip'); b.type = 'button';
+    b.setAttribute('aria-pressed', String(S.sig === key));
+    b.appendChild(document.createTextNode(lbl + ' '));
+    b.appendChild(el('span', 'n', String(counts[key])));
+    b.addEventListener('click', () => { S.sig = key; renderAll(); });
+    box.appendChild(b);
+  }
+}
+
+/* ---------- trend chart ---------- */
+const METRIC = { units:{lbl:'Шт', get:v=>v.u, fmt:fmtI}, revenue:{lbl:'Выручка', get:v=>v.r, fmt:fmtMoney},
+                 profit:{lbl:'Прибыль', get:v=>v.p, fmt:fmtMoney} };
+let lastTrendW = 0;                       // ширина, под которую посчитан текущий viewBox
+function renderTrend(rows) {
+  const m = METRIC[S.metric];
+  const days = [];
+  for (let i = S.period - 1; i >= 0; i--) {
+    const date = addDays(anchor, -i);
+    let u=0, r=0, p=0, o=0, c=0;
+    for (const row of rows) { const v = (sales[row.c.pid] || {})[date];
+      if (v) { u+=v.u; r+=v.r; p+=v.p; o+=v.o; c+=v.c; } }
+    days.push({ date, u, r, p, o, c });
+  }
+  $('trendTitle').textContent = m.lbl === 'Шт' ? 'Продажи по дням, шт' : m.lbl + ' по дням';
+  $('trendSvg').setAttribute('aria-label', $('trendTitle').textContent);
+  $('trendNote').textContent = 'Сумма по ' + rows.length + ' отфильтрованным карточкам · без отменённых';
+  const svg = $('trendSvg');
+  lastTrendW = svg.parentNode.clientWidth;
+  const W = Math.max(320, lastTrendW), H = 220,
+        padL = S.metric === 'units' ? 46 : 74, padR = 8, padT = 10, padB = 26;
+  svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.style.height = H + 'px';
+  svg.textContent = '';
+  const ns = 'http://www.w3.org/2000/svg';
+  const add = (parent, tag, attrs) => { const n = document.createElementNS(ns, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]); parent.appendChild(n); return n; };
+  const vals = days.map(d => m.get(d));
+  const nice = v => { const p = Math.pow(10, Math.floor(Math.log10(v)));
+    for (const s of [1,2,2.5,5,10]) if (s*p >= v) return s*p; return 10*p; };
+  const niceMax = nice(Math.max(1, ...vals));
+  const lo = Math.min(0, ...vals);                    // убыточные дни — ниже нуля, а не «пусто»
+  const niceMin = lo < 0 ? -nice(-lo) : 0;
+  const plotW = W - padL - padR, plotH = H - padT - padB;
+  const y = v => padT + plotH * (niceMax - v) / (niceMax - niceMin);
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  for (let g = 0; g <= 4; g++) {                                   // сетка + тики
+    const val = niceMin + (niceMax - niceMin) * g / 4, yy = y(val);
+    add(svg, 'line', { x1:padL, x2:W-padR, y1:yy, y2:yy, stroke:css('--grid'), 'stroke-width':1 });
+    const t = add(svg, 'text', { x:padL-7, y:yy+4, 'text-anchor':'end', fill:css('--muted'),
+      'font-size':10.5, 'font-family':'inherit' });
+    t.textContent = S.metric === 'units' ? fmtI(val) : fmtMoney(val);
+  }
+  add(svg, 'line', { x1:padL, x2:W-padR, y1:y(0), y2:y(0), stroke:css('--axis'), 'stroke-width':1 });
+  const slot = plotW / days.length, bw = Math.min(24, Math.max(3, slot - 2));
+  // подписи X: шаг по доступной ширине (метка «01.07» ≈ 30px + воздух), последняя — всегда
+  const step = Math.max(1, Math.ceil(38 / slot));
+  const lastLabelled = days.length - 1 - ((days.length - 1) % step);
+  days.forEach((d, i) => {
+    const v = m.get(d), x = padL + slot*i + (slot-bw)/2, yy = y(v);
+    const h = y(0) - yy;
+    if (h > 0.5)                                  // положительный столбец: скруглён сверху
+      add(svg, 'path', { d: roundTop(x, yy, bw, h, Math.min(4, bw/2, h)), fill:css('--s1') });
+    else if (h < -0.5)                            // убыток: вниз от нуля, скруглён снизу
+      add(svg, 'path', { d: roundBottom(x, y(0), bw, -h, Math.min(4, bw/2, -h)), fill:css('--crit') });
+    const isLast = i === days.length - 1;
+    // не рисуем «плановую» метку, если сразу за ней встанет обязательная последняя
+    const show = isLast || (i % step === 0 && !(i === lastLabelled && lastLabelled !== days.length - 1
+      && (days.length - 1 - i) * slot < 38));
+    if (show) {
+      const t = add(svg, 'text', { x:x+bw/2, y:H-8, 'text-anchor':'middle', fill:css('--muted'),
+        'font-size':10.5, 'font-family':'inherit' });
+      t.textContent = fmtDate(d.date);
+    }
+  });
+  const cross = add(svg, 'line', { y1:padT, y2:y(0), stroke:css('--axis'),
+    'stroke-width':1, visibility:'hidden' });
+  const tip = $('tooltip');
+  svg.onpointermove = e => {
+    const r = svg.getBoundingClientRect();
+    const vx = (e.clientX - r.left) * (W / r.width);          // px экрана → координаты viewBox
+    const i = Math.min(days.length - 1, Math.max(0, Math.floor((vx - padL) / slot)));
+    const d = days[i]; if (!d) return;
+    const cx = padL + slot*i + slot/2;
+    cross.setAttribute('x1', cx); cross.setAttribute('x2', cx);
+    cross.setAttribute('visibility', 'visible');
+    tip.textContent = '';
+    tip.appendChild(el('div', 'tt-title', fmtDate(d.date)));
+    tip.appendChild(el('div', 'tt-val', m.fmt(m.get(d)) + (S.metric === 'units' ? ' шт' : ' сум')));
+    tip.appendChild(el('div', 'tt-sub', 'заказов: ' + d.o + (d.c ? ' · отмен: ' + d.c : '')));
+    tip.style.display = 'block';
+    const tw = tip.offsetWidth, th = tip.offsetHeight;
+    tip.style.left = Math.max(8, Math.min(window.innerWidth - tw - 12, e.clientX + 14)) + 'px';
+    tip.style.top = (e.clientY + 14 + th > window.innerHeight    // не уезжать за нижний край
+      ? Math.max(8, e.clientY - th - 14) : e.clientY + 14) + 'px';
+  };
+  svg.onpointerleave = () => { cross.setAttribute('visibility','hidden'); tip.style.display='none'; };
+  renderTrendTable(days);
+}
+/* таблица-двойник: те же значения без наведения (график ничего не «запирает» в тултипе) */
+function renderTrendTable(days) {
+  const t = $('trendTbl'); t.textContent = '';
+  const thead = el('thead'), trh = el('tr');
+  for (const h of ['Дата','Шт','Выручка, сум','Прибыль, сум','Заказов','Отмен'])
+    trh.appendChild(el('th', '', h));
+  thead.appendChild(trh); t.appendChild(thead);
+  const tb = el('tbody');
+  for (const d of [...days].reverse()) {
+    const tr = el('tr');
+    [fmtDate(d.date), fmtI(d.u), fmtI(d.r), fmtI(d.p), fmtI(d.o), d.c ? fmtI(d.c) : '—']
+      .forEach(v => tr.appendChild(el('td', '', v)));
+    tb.appendChild(tr);
+  }
+  const tot = el('tr');
+  ['Итого', fmtI(days.reduce((s,d)=>s+d.u,0)), fmtI(days.reduce((s,d)=>s+d.r,0)),
+   fmtI(days.reduce((s,d)=>s+d.p,0)), fmtI(days.reduce((s,d)=>s+d.o,0)),
+   fmtI(days.reduce((s,d)=>s+d.c,0))].forEach(v => {
+    const td = el('td', '', v); td.style.fontWeight = '650'; tot.appendChild(td); });
+  tb.appendChild(tot);
+  t.appendChild(tb);
+}
+function roundTop(x, y, w, h, r) {
+  return 'M' + x + ' ' + (y+h) + ' L' + x + ' ' + (y+r) + ' Q' + x + ' ' + y + ' ' + (x+r) + ' ' + y +
+    ' L' + (x+w-r) + ' ' + y + ' Q' + (x+w) + ' ' + y + ' ' + (x+w) + ' ' + (y+r) +
+    ' L' + (x+w) + ' ' + (y+h) + ' Z';
+}
+function roundBottom(x, y0, w, h, r) {            // столбец вниз от базовой линии y0
+  return 'M' + x + ' ' + y0 + ' L' + x + ' ' + (y0+h-r) + ' Q' + x + ' ' + (y0+h) + ' ' + (x+r) + ' ' + (y0+h) +
+    ' L' + (x+w-r) + ' ' + (y0+h) + ' Q' + (x+w) + ' ' + (y0+h) + ' ' + (x+w) + ' ' + (y0+h-r) +
+    ' L' + (x+w) + ' ' + y0 + ' Z';
+}
+
+/* ---------- sparkline (14 дн, шт) ---------- */
+function sparkSvg(pid) {
+  const n = 14, w = 66, h = 20, bw = 3;
+  const vals = [];
+  for (let i = n-1; i >= 0; i--) {
+    const v = (sales[pid] || {})[addDays(anchor, -i)];
+    vals.push(v ? v.u : 0);
+  }
+  const max = Math.max(1, ...vals);
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('width', w); svg.setAttribute('height', h); svg.classList.add('spark');
+  vals.forEach((v, i) => {
+    const bh = v === 0 ? 1.5 : Math.max(2, h * v / max);
+    const rect = document.createElementNS(ns, 'rect');
+    rect.setAttribute('x', i * (bw + 2)); rect.setAttribute('y', h - bh);
+    rect.setAttribute('width', bw); rect.setAttribute('height', bh);
+    rect.setAttribute('fill', i === vals.length - 1 ? 'var(--s1)' : 'var(--s1-soft)');
+    if (v === 0) rect.setAttribute('opacity', '.35');
+    svg.appendChild(rect);
+  });
+  return svg;
+}
+
+/* ---------- table ---------- */
+const COLS = [
+  { key:'title', lbl:'Товар', l:true, val:r=>r.c.title },
+  { key:'rank',  lbl:'Ранг',  val:r=>r.c.rank || '—' },
+  { key:'price', lbl:'Цена',  val:r=>r.c.price, fmt:fmtI },
+  { key:'stock', lbl:'Остаток', val:r=>r.c.stock },
+  { key:'sdays', lbl:'Дней ост.', val:r=>r.a.stockDays },
+  { key:'spark', lbl:'14 дн', sortable:false },
+  { key:'u',     lbl:'Шт', val:r=>r.a.cur.u },
+  { key:'du',    lbl:'Δ шт', val:r=>r.a.prev ? r.a.cur.u - r.a.prev.u : null },
+  { key:'rev',   lbl:'Выручка', val:r=>r.a.cur.r, fmt:fmtI },
+  { key:'prof',  lbl:'Прибыль', val:r=>r.a.cur.p, fmt:fmtI },
+  { key:'ret',   lbl:'Возвр.%', val:r=>r.c.ret_pct },
+  { key:'view',  lbl:'Просм.', val:r=>r.c.viewers },
+  { key:'conv',  lbl:'Конв.%', val:r=>r.c.conv },
+  { key:'rate',  lbl:'Рейтинг', val:r=>r.c.rating },
+  { key:'sig',   lbl:'Сигнал / действие', l:true, sortable:false },
+];
+function renderTable(rows) {
+  $('tblNote').textContent = 'Шт / выручка / прибыль — за ' + S.period +
+    ' дн. Клик по строке — детали карточки. Клик по заголовку — сортировка.';
+  const head = $('tblHead'); head.textContent = '';
+  for (const col of COLS) {
+    const th = el('th', col.l ? 'l' : '', col.lbl + ' ');
+    if (col.sortable !== false) {
+      if (S.sort.key === col.key) th.appendChild(el('span', 'arr', S.sort.dir < 0 ? '↓' : '↑'));
+      const sortBy = () => {
+        S.sort = { key: col.key, dir: S.sort.key === col.key ? -S.sort.dir : -1 };
+        renderAll();
+        const again = [...$('tblHead').children].find(x => x.textContent.startsWith(col.lbl));
+        if (again) again.focus();                       // фокус переживает перерисовку
+      };
+      th.tabIndex = 0; th.setAttribute('role', 'columnheader');
+      th.addEventListener('click', sortBy);
+      th.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); sortBy(); } });
+      th.setAttribute('aria-sort', S.sort.key === col.key ?
+        (S.sort.dir < 0 ? 'descending' : 'ascending') : 'none');
+    } else th.style.cursor = 'default';
+    head.appendChild(th);
+  }
+  const col = COLS.find(c => c.key === S.sort.key);
+  if (col && col.val) rows.sort((a, b) => {
+    const va = col.val(a), vb = col.val(b);
+    if (va == null && vb == null) return 0;
+    if (va == null) return 1; if (vb == null) return -1;
+    return (typeof va === 'string' ? va.localeCompare(vb, 'ru') : va - vb) * S.sort.dir;
+  });
+  const body = $('tblBody'); body.textContent = '';
+  for (const r of rows) {
+    const tr = el('tr'); tr.tabIndex = 0;
+    const open = () => openDrawer(r);
+    tr.addEventListener('click', open);
+    tr.addEventListener('keydown', e => { if (e.key === 'Enter') open(); });
+
+    const tdT = el('td', 'l');
+    const nm = el('div', 'tname', r.c.title); nm.title = r.c.title;
+    tdT.appendChild(nm); tdT.appendChild(el('div', 'tcat', r.c.category));
+    tr.appendChild(tdT);
+
+    const tdR = el('td'); tdR.appendChild(el('span', 'rank ' + esc(r.c.rank), r.c.rank || '—'));
+    tr.appendChild(tdR);
+    tr.appendChild(el('td', '', fmtI(r.c.price)));
+    tr.appendChild(el('td', '', fmtI(r.c.stock)));
+    tr.appendChild(el('td', '', r.a.stockDays === null ? '—' : String(r.a.stockDays)));
+    const tdS = el('td'); tdS.appendChild(sparkSvg(r.c.pid)); tr.appendChild(tdS);
+    tr.appendChild(el('td', '', fmtI(r.a.cur.u)));
+    const du = r.a.prev ? r.a.cur.u - r.a.prev.u : null;
+    tr.appendChild(el('td', du === null ? '' : du > 0 ? 'dpos' : du < 0 ? 'dneg' : '',
+      du === null ? 'н/д' : (du > 0 ? '+' : '') + sign(du)));
+    tr.appendChild(el('td', '', fmtI(r.a.cur.r)));
+    tr.appendChild(el('td', '', fmtI(r.a.cur.p)));
+    tr.appendChild(el('td', '', r.c.ret_pct === null ? '—' : r.c.ret_pct + '%'));
+    tr.appendChild(el('td', '', fmtI(r.c.viewers)));
+    tr.appendChild(el('td', '', r.c.conv === null ? '—' : String(r.c.conv)));
+    tr.appendChild(el('td', '', (r.c.rating || '—') + ' (' + r.c.reviews + ')'));
+    const tdSig = el('td', 'l');
+    tdSig.appendChild(el('span', 'sig ' + r.sig.cls, r.sig.icon + ' ' + r.sig.txt));
+    tr.appendChild(tdSig);
+    body.appendChild(tr);
+  }
+}
+
+/* ---------- drawer ---------- */
+function miniChart(pid, metric, days) {
+  const w = 480, h = 110, padL = 56, padB = 18, padT = 6;
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  svg.style.width = '100%'; svg.style.display = 'block';
+  const vals = [];
+  for (let i = days-1; i >= 0; i--) {
+    const d = addDays(anchor, -i), v = (sales[pid] || {})[d];
+    vals.push({ d, v: v ? metric.get(v) : 0 });
+  }
+  const max = Math.max(1, ...vals.map(x => x.v));
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const plotH = h - padT - padB, slot = (w - padL - 4) / vals.length,
+        bw = Math.min(10, Math.max(2, slot - 2));
+  const add = (tag, attrs) => { const n = document.createElementNS(ns, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]); svg.appendChild(n); return n; };
+  add('line', { x1:padL, x2:w-4, y1:padT+plotH, y2:padT+plotH, stroke:css('--axis'), 'stroke-width':1 });
+  const t0 = add('text', { x:padL-6, y:padT+9, 'text-anchor':'end', fill:css('--muted'), 'font-size':9.5 });
+  t0.textContent = metric.fmt(max);
+  vals.forEach((x, i) => {
+    if (x.v <= 0) return;
+    const bh = plotH * x.v / max;
+    add('path', { d: roundTop(padL + slot*i + (slot-bw)/2, padT + plotH - bh, bw, bh,
+      Math.min(2, bw/2, bh)), fill: css('--s1') });   // скругление только сверху, низ на оси
+  });
+  [0, Math.floor(vals.length/2), vals.length-1].forEach(i => {
+    const t = add('text', { x: padL + slot*i + slot/2, y: h-4, 'text-anchor':'middle',
+      fill: css('--muted'), 'font-size':9.5 });
+    t.textContent = fmtDate(vals[i].d);
+  });
+  return svg;
+}
+let openRow = null;                        // текущая карточка в панели — для перерисовки по теме
+function openDrawer(r) {
+  openRow = r;
+  const c = r.c, b = $('dBody'); b.textContent = '';
+  b.appendChild(el('h3', '', c.title));
+  b.appendChild(el('div', 'dcat', c.category + ' · ID ' + c.pid + ' · SKU: ' + c.skus));
+  const sig = el('div', 'dsig', r.sig.icon + ' ' + r.sig.txt);
+  b.appendChild(sig);
+  const grid = el('div', 'dgrid');
+  const cells = [
+    ['Ранг', c.rank || '—'], ['Цена', fmtI(c.price) + ' сум'], ['Остаток', c.stock],
+    ['Дней остатка', r.a.stockDays === null ? '—' : r.a.stockDays],
+    ['Шт за ' + S.period + ' дн', r.a.cur.u],
+    ['Выручка', fmtMoney(r.a.cur.r) + ' сум'], ['Прибыль', fmtMoney(r.a.cur.p) + ' сум'],
+    ['Заказов', r.a.cur.o + (r.a.cur.c ? ' (+' + r.a.cur.c + ' отм.)' : '')],
+    ['Продано всего', c.sold], ['Возвраты', c.ret_pct === null ? '—' : c.ret_pct + '%'],
+    ['Просмотры', fmtI(c.viewers)], ['Конверсия', c.conv === null ? '—' : c.conv + '%'],
+    ['Рейтинг', (c.rating || '—') + ' (' + c.reviews + ')'],
+    ['ROI', (v => v === null ? '—' : sign(v.toLocaleString('ru-RU', {maximumFractionDigits:1})) + '%')(
+      (x => isNaN(x) ? null : x)(parseFloat(c.roi)))],
+    ['Статус', c.status], ['Модерация', c.moderation],
+  ];
+  for (const [k, v] of cells) {
+    const cell = el('div', 'dcell');
+    cell.appendChild(el('div', 'k', k)); cell.appendChild(el('div', 'v', String(v)));
+    grid.appendChild(cell);
+  }
+  b.appendChild(grid);
+
+  const histDays = Math.min(35, availDays);
+  b.appendChild(el('h4', '', 'Продажи по дням, шт (' + histDays + ' дн)'));
+  b.appendChild(miniChart(c.pid, METRIC.units, histDays));
+  b.appendChild(el('h4', '', 'Выручка по дням (' + histDays + ' дн)'));
+  b.appendChild(miniChart(c.pid, METRIC.revenue, histDays));
+
+  b.appendChild(el('h4', '', 'История метрик (лог снимков)'));
+  const hist = (logByPid[c.pid] || []).slice(-14).reverse();
+  if (hist.length > 1) {
+    const t = el('table', 'mini'), thead = el('thead'), trh = el('tr');
+    for (const h of ['Дата','Ранг','Цена','Остаток','Продано','Просм.','Конв.%']) trh.appendChild(el('th','',h));
+    thead.appendChild(trh); t.appendChild(thead);
+    const tb = el('tbody');
+    for (const h of hist) {
+      const tr = el('tr');
+      [fmtDate(h.date), h.rank || '—', fmtI(h.price), h.stock, h.sold, h.viewers,
+       h.conv === null ? '—' : h.conv].forEach(v => tr.appendChild(el('td','',String(v))));
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); b.appendChild(t);
+  } else b.appendChild(el('div','empty','Лог накапливается — история появится через несколько дней.'));
+
+  b.appendChild(el('h4', '', 'Позиции по ключам (ручной срез)'));
+  const keys = keysByPid[c.pid] || [];
+  if (keys.length) {
+    const t = el('table', 'mini'), thead = el('thead'), trh = el('tr');
+    for (const h of ['Дата','Ключ','Позиция','Охват','Примечание']) trh.appendChild(el('th','',h));
+    thead.appendChild(trh); t.appendChild(thead);
+    const tb = el('tbody');
+    for (const kr of keys) {
+      const tr = el('tr');
+      [kr.date, kr.key, kr.pos, kr.reach, kr.note].forEach(v => tr.appendChild(el('td','',esc(v))));
+      tb.appendChild(tr);
+    }
+    t.appendChild(tb); b.appendChild(t);
+  } else b.appendChild(el('div','empty',
+    'Среза нет. Позиции по ключам снимаются еженедельно вручную (капча на витрине) → keys_manual.csv.'));
+
+  $('overlay').style.display = 'block';
+  $('drawer').classList.add('open');
+}
+function closeDrawer() { openRow = null;
+  $('overlay').style.display='none'; $('drawer').classList.remove('open'); }
+$('overlay').addEventListener('click', closeDrawer);
+$('dClose').addEventListener('click', closeDrawer);
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawer(); });
+
+/* ---------- controls ---------- */
+$('periodSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  S.period = +b.dataset.p;
+  for (const x of $('periodSeg').children) x.setAttribute('aria-pressed', String(x === b));
+  renderAll();
+});
+$('metricSeg').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  S.metric = b.dataset.m;
+  for (const x of $('metricSeg').children) x.setAttribute('aria-pressed', String(x === b));
+  renderAll();
+});
+let qT; $('search').addEventListener('input', e => {
+  clearTimeout(qT); qT = setTimeout(() => { S.q = e.target.value; renderAll(); }, 150);
+});
+// ResizeObserver, а не window.resize: ловит и изменение самого контейнера
+// (открытие панели, полосы прокрутки, зум) — иначе viewBox расходится с реальной шириной.
+// Перерисовка на следующем кадре, без задержки: viewBox шире/уже реальной ширины
+// заставляет SVG отмасштабировать и отцентрировать график — заметно как «схлопнулся».
+(() => { let pending = false;
+  const redraw = () => { if (pending) return; pending = true;
+    requestAnimationFrame(() => { pending = false;
+      const w = $('trendWrap').clientWidth;
+      if (w && Math.abs(w - lastTrendW) > 1) renderAll(); }); };
+  if (window.ResizeObserver) new ResizeObserver(redraw).observe($('trendWrap'));
+  window.addEventListener('resize', redraw);
+})();
+
+/* ---------- main ---------- */
+function renderAll() {
+  const rowsAll = DATA.cards.map(c => { const a = cardAgg(c, S.period);
+    return { c, a, sig: signal(c, a) }; })
+    .filter(r => { const q = S.q.trim().toLowerCase();
+      return !q || (r.c.title + ' ' + r.c.category + ' ' + r.c.pid).toLowerCase().includes(q); });
+  renderChips(rowsAll);
+  const rows = rowsAll.filter(r => S.sig === 'all' || r.sig.bucket === S.sig);
+  renderKpis(rows);
+  renderTrend(rows);
+  renderTable(rows);
+  if (openRow) {                       // панель открыта — пересобрать её в текущей теме/периоде
+    const fresh = rowsAll.find(r => r.c.pid === openRow.c.pid);
+    if (fresh) openDrawer(fresh); else closeDrawer();
+  }
+}
+document.querySelector('header.top h1').textContent =
+  'Uzum · ' + (DATA.shopTitle || DATA.shops.join(', ')) + ' — карточки';
+$('genInfo').textContent = 'снимок ' + anchor + ' · сформировано ' + DATA.generated;
+renderAll();
+</script>
+</body>
+</html>
